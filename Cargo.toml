@@ -7,11 +7,13 @@ edition = "2021"
 [dependencies]
 actix-web="4.0.0-beta.11"
 async-trait = "0.1.51"
-async-graphql="3.0.6"
-async-graphql-actix-web="3.0.6"
-rand = "0.8"
+async-graphql="3.0.7"
+async-graphql-actix-web="3.0.7"
+rand = "0.8.4"
 reqwest={version = "0.11.6", features = ["json"]}
 serde="1.0.130"
+thiserror = "1.0.30"
+url="2.2.2"
 
 [profile.release]
 lto = "thin"

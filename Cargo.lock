@@ -286,9 +286,9 @@ dependencies = [
 
 [[package]]
 name = "async-graphql"
-version = "3.0.6"
+version = "3.0.7"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "28eb129b44133b4a583f4b38048287d9747ba4a282e4e478c6ee46b9ec19ee2e"
+checksum = "bf244f203c8b1c25cee466b32212e689ef58f9674fa1307ff41576be41abfcdb"
 dependencies = [
  "async-graphql-derive",
  "async-graphql-parser",
@@ -315,9 +315,9 @@ dependencies = [
 
 [[package]]
 name = "async-graphql-actix-web"
-version = "3.0.6"
+version = "3.0.7"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "328cb39440dba76c2853939f4728332b1911dc7dc074c7ee5afcb329f8b86772"
+checksum = "e370bd647840f667f92bfe618e5054f5486c6318f5a0305ec9bf1211c0b69f61"
 dependencies = [
  "actix",
  "actix-http",
@@ -334,9 +334,9 @@ dependencies = [
 
 [[package]]
 name = "async-graphql-derive"
-version = "3.0.6"
+version = "3.0.7"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "95b5c943055498dfbdd6390f8856e791e8e689082a7decc47600246af81d8843"
+checksum = "92af618631923f12c31d98cacd507b14400bd42a6ae4f23d60c2e8f2f909e724"
 dependencies = [
  "Inflector",
  "async-graphql-parser",
@@ -350,9 +350,9 @@ dependencies = [
 
 [[package]]
 name = "async-graphql-parser"
-version = "3.0.6"
+version = "3.0.7"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "a637070071f07804a102b31b7a6f67d7a31bea3c16378351697e131544b54b4a"
+checksum = "86d50f95aa06d606f91e802449fe8a23735eaff1d67ae6485b6d7f0e5608d645"
 dependencies = [
  "async-graphql-value",
  "pest",
@@ -363,9 +363,9 @@ dependencies = [
 
 [[package]]
 name = "async-graphql-value"
-version = "3.0.6"
+version = "3.0.7"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "13fb21cc4e13005b9778e3db09e9200efec6969a832ea8fd1ad8594682a2e322"
+checksum = "bae61bf2755097ec092ca75eff0e56db880ffc2722b3e01d112e21941504d34f"
 dependencies = [
  "bytes",
  "indexmap",
@@ -1338,6 +1338,8 @@ dependencies = [
  "rand",
  "reqwest",
  "serde",
+ "thiserror",
+ "url",
 ]
 
 [[package]]
