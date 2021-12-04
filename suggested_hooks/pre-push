@@ -1,1 +1,8 @@
+echo -n "Checking repository state "
+if ! git diff --quiet; then
+    echo "❌"
+    return 1
+fi
+echo "✔️"
+
 cargo fmt --check && cargo clippy && cargo test
