@@ -1,1 +1,1 @@
-cargo fmt --all && git add src -u
+cargo fmt --all && cargo clippy --fix --allow-dirty --allow-staged && git add src -u
