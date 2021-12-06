@@ -1,12 +1,15 @@
 pub mod errors;
+pub mod types;
 
 use std::sync::Arc;
 
 use async_trait::async_trait;
+use rand::RngCore;
 use reqwest::{Client, Url};
 use serde::Serialize;
 
 use crate::served::types::graphql::Speech;
+use crate::utils::{LogLevel, Loggable};
 
 use self::errors::{AppError, DataError};
 
@@ -18,6 +21,23 @@ pub struct SpeechRequest {
     text: String,
     is_male: bool,
 }
+
+impl From<SpeechToUpload> for SpeechRequest {
+    fn from(this: SpeechToUpload) -> Self {
+        Self {
+            text: this.text,
+            is_male: this.is_male,
+        }
+    }
+}
+
+#[derive(Clone)]
+pub struct SpeechToUpload {
+    pub text: String,
+    pub is_male: bool,
+}
+
+pub struct SpeechGenerationOptions {}
 
 pub struct UploadResult {
     url: Url,
@@ -38,31 +58,45 @@ impl UploadResult {
 }
 
 #[async_trait]
-pub trait AsyncUploader {
-    async fn upload(&self, request: &SpeechRequest) -> AppResult<UploadResult>;
+pub trait AsyncHealth {
+    async fn is_healthy(&self) -> AppResult<()>;
 }
 
 #[async_trait]
-pub trait AsyncHealth {
-    async fn is_healthy(&self) -> AppResult<()>;
+pub trait AsyncUploader {
+    async fn upload(&self, request: &SpeechToUpload) -> AppResult<UploadResult>;
+}
+
+#[async_trait]
+pub trait AsyncPhraseGenerator {
+    async fn generate(&self, options: SpeechGenerationOptions) -> AppResult<Speech>;
 }
 
 #[async_trait]
 pub trait AsyncHealthyUploader: AsyncUploader + AsyncHealth {}
 
 type AppUploader = dyn AsyncHealthyUploader + Send + Sync;
+type AppPhraseGenerator = dyn AsyncPhraseGenerator + Send + Sync;
 
 pub struct AppCore {
     uploader: Arc<AppUploader>,
+    generator: Arc<AppPhraseGenerator>,
 }
 
 impl AppCore {
-    pub fn new(uploader: Arc<AppUploader>) -> Self {
-        Self { uploader }
+    pub fn new(uploader: Arc<AppUploader>, generator: Arc<AppPhraseGenerator>) -> Self {
+        Self {
+            uploader,
+            generator,
+        }
     }
 
     pub fn uploader(&self) -> &AppUploader {
         self.uploader.as_ref()
+    }
+
+    pub fn generator(&self) -> &AppPhraseGenerator {
+        self.generator.as_ref()
     }
 
     pub async fn is_healthy(&self) -> AppResult<()> {
@@ -82,17 +116,18 @@ impl Uploader {
 
 #[async_trait]
 impl AsyncUploader for Uploader {
-    async fn upload(&self, request: &SpeechRequest) -> AppResult<UploadResult> {
-        let result = (&self.client)
+    async fn upload(&self, request: &SpeechToUpload) -> AppResult<UploadResult> {
+        let req: SpeechRequest = request.clone().into();
+        (&self.client)
             .post("http://localhost:8080/speak")
-            .json(request)
+            .json(&req)
             .send()
             .await
-            .map_err(AppError::for_upload)?;
-
-        result
+            .log_err("Unable to upload the requested speech", LogLevel::Error)
+            .map_err(AppError::for_upload)?
             .text()
             .await
+            .log_err("Unable to retrieve the response", LogLevel::Error)
             .map_err(AppError::for_upload)
             .and_then(|url| UploadResult::parse(&url))
     }
@@ -109,6 +144,7 @@ impl AsyncHealth for Uploader {
             })
             .send()
             .await
+            .log_err("Uploader is not healthy", LogLevel::Warning)
             .map_err(AppError::for_infrastructure)
             .map(|_| ())
     }
@@ -117,21 +153,21 @@ impl AsyncHealth for Uploader {
 #[async_trait]
 impl AsyncHealthyUploader for Uploader {}
 
-pub struct Resolver;
-impl Resolver {
-    pub async fn generate_random() -> AppResult<Speech> {
-        Ok(Speech {
-            id: "1".to_owned(),
-            text: "Ciao mondo".to_owned(),
-        })
-    }
+pub struct PhraseGenerator;
 
-    pub async fn upload_audio(text: &str, uploader: &AppUploader) -> AppResult<UploadResult> {
-        uploader
-            .upload(&SpeechRequest {
-                text: text.to_owned(),
-                is_male: true,
+#[async_trait]
+impl AsyncPhraseGenerator for PhraseGenerator {
+    async fn generate(&self, _: SpeechGenerationOptions) -> AppResult<Speech> {
+        if rand::thread_rng().next_u32() % 100 > 50 {
+            Ok(Speech {
+                id: "1".to_owned(),
+                text: "Ciao mondo".to_owned(),
             })
-            .await
+        } else {
+            Ok(Speech {
+                id: "3".to_owned(),
+                text: "Ciaone mondone".to_owned(),
+            })
+        }
     }
 }

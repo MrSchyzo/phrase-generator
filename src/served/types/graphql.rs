@@ -1,14 +1,42 @@
-use async_graphql::{Context, Object};
+use async_graphql::{Context, Enum, InputObject, Object};
+
 use std::sync::Arc;
 
-use crate::app_core::{AppCore, AppResult, Resolver};
+use crate::app_core::{AppCore, AppResult, SpeechGenerationOptions, SpeechToUpload};
 
 pub struct QueryRoot;
 
+#[derive(InputObject)]
+pub struct SpeechGenerationOpts {
+    pub category: String,
+}
+
+#[derive(InputObject)]
+pub struct Voice {
+    pub language: Language,
+    pub gender: Gender,
+}
+
+#[derive(Enum, Copy, Clone, Eq, PartialEq)]
+pub enum Language {
+    Italian,
+}
+
+#[derive(Enum, Copy, Clone, Eq, PartialEq)]
+pub enum Gender {
+    Male,
+    Female,
+}
+
 #[Object]
 impl QueryRoot {
-    async fn random(&self) -> AppResult<Speech> {
-        Resolver::generate_random().await
+    async fn random<'ctx>(
+        &self,
+        ctx: &Context<'ctx>,
+        _opts: SpeechGenerationOpts,
+    ) -> AppResult<Speech> {
+        let generator = ctx.data_unchecked::<Arc<AppCore>>().generator();
+        generator.generate(SpeechGenerationOptions {}).await
     }
 }
 
@@ -27,10 +55,14 @@ impl Speech {
         &self.text
     }
 
-    pub async fn audio_url<'ctx>(&self, ctx: &Context<'ctx>) -> AppResult<String> {
+    pub async fn audio_url<'c>(&self, ctx: &Context<'c>, voice: Voice) -> AppResult<String> {
         let uploader = ctx.data_unchecked::<Arc<AppCore>>().uploader();
         let text = &self.text;
-        Resolver::upload_audio(text, uploader)
+        uploader
+            .upload(&SpeechToUpload {
+                is_male: matches!(voice.gender, Gender::Male),
+                text: text.clone(),
+            })
             .await
             .map(|res| res.url().as_str().to_owned())
     }

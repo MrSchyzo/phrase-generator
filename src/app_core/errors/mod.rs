@@ -21,7 +21,7 @@ impl AppError {
 
 #[derive(Error, Debug, Clone)]
 pub enum UploadError {
-    #[error("Http failure: {0}")]
+    #[error("Server had problems connecting to its dependencies.")]
     HttpFailed(#[from] HttpError),
 }
 

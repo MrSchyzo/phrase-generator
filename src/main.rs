@@ -1,7 +1,9 @@
 mod app_core;
+mod outgoing;
 mod served;
+pub mod utils;
 
-use crate::app_core::{AppCore, Uploader};
+use crate::app_core::{AppCore, PhraseGenerator, Uploader};
 use std::sync::Arc;
 
 use actix_web::web::{self, Data};
@@ -14,11 +16,15 @@ use served::types::graphql::QueryRoot;
 
 #[actix_web::main]
 async fn main() -> std::io::Result<()> {
-    let core = Arc::new(AppCore::new(Arc::new(Uploader::new(Client::new()))));
+    let uploader = Uploader::new(Client::new());
+    let generator = PhraseGenerator {};
+    let core = Arc::new(AppCore::new(Arc::new(uploader), Arc::new(generator)));
 
     let schema = Schema::build(QueryRoot, EmptyMutation, EmptySubscription)
         .data(core.clone()) //For GQL field async resolvers through Context
         .finish();
+
+    tracing_subscriber::fmt::init();
 
     println!("Playground: http://localhost:8000");
 
