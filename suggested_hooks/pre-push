@@ -5,4 +5,4 @@ if [ -n "$(git status -s)" ]; then
 fi
 echo "✔️"
 
-cargo fmt --check && cargo clippy && cargo test
+cargo fmt --check && cargo clippy -- -D warnings && cargo test

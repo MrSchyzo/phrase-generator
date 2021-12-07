@@ -11,20 +11,33 @@ use actix_web::{guard, App, HttpServer};
 
 use async_graphql::{EmptyMutation, EmptySubscription, Schema};
 
-use reqwest::Client;
+use crate::outgoing::tts_wrapper::{SimpleTtsWrapperClient, TtsWrapperConnectionOpts};
+use reqwest::{Client, Url};
 use served::types::graphql::QueryRoot;
+
+use tracing::info;
 
 #[actix_web::main]
 async fn main() -> std::io::Result<()> {
-    let uploader = Uploader::new(Client::new());
+    tracing_subscriber::fmt::init();
+
+    let tts_wrapper_root =
+        std::env::var("TTS_WRAPPER_URL").unwrap_or_else(|_| "http://localhost:8080".to_owned());
+
+    info!("Connecting to TTS wrapper at: {}", tts_wrapper_root);
+
+    let uploader = Uploader::new(Arc::new(SimpleTtsWrapperClient::new(
+        Client::new(),
+        TtsWrapperConnectionOpts {
+            root_url: Url::parse(&tts_wrapper_root).unwrap(),
+        },
+    )));
     let generator = PhraseGenerator {};
     let core = Arc::new(AppCore::new(Arc::new(uploader), Arc::new(generator)));
 
     let schema = Schema::build(QueryRoot, EmptyMutation, EmptySubscription)
         .data(core.clone()) //For GQL field async resolvers through Context
         .finish();
-
-    tracing_subscriber::fmt::init();
 
     println!("Playground: http://localhost:8000");
 

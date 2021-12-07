@@ -2,7 +2,7 @@ use async_graphql::{Context, Enum, InputObject, Object};
 
 use std::sync::Arc;
 
-use crate::app_core::{AppCore, AppResult, SpeechGenerationOptions, SpeechToUpload};
+use crate::app_core::{AppCore, AppResult, SpeechGenerationOptions};
 
 pub struct QueryRoot;
 
@@ -59,11 +59,11 @@ impl Speech {
         let uploader = ctx.data_unchecked::<Arc<AppCore>>().uploader();
         let text = &self.text;
         uploader
-            .upload(&SpeechToUpload {
+            .upload(crate::app_core::types::upload::Speech {
                 is_male: matches!(voice.gender, Gender::Male),
                 text: text.clone(),
             })
             .await
-            .map(|res| res.url().as_str().to_owned())
+            .map(|res| res.url.to_string())
     }
 }

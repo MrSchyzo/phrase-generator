@@ -1,61 +1,20 @@
+use std::sync::Arc;
+
+use crate::app_core::types::upload::UploadedSpeech;
+use crate::outgoing::tts_wrapper::TtsWrapper;
+use async_trait::async_trait;
+use rand::RngCore;
+
+use crate::served::types::graphql::Speech;
+
+use self::errors::AppError;
+
 pub mod errors;
 pub mod types;
 
-use std::sync::Arc;
-
-use async_trait::async_trait;
-use rand::RngCore;
-use reqwest::{Client, Url};
-use serde::Serialize;
-
-use crate::served::types::graphql::Speech;
-use crate::utils::{LogLevel, Loggable};
-
-use self::errors::{AppError, DataError};
-
 pub type AppResult<T> = Result<T, AppError>;
 
-#[derive(Serialize)]
-#[serde(rename_all = "camelCase")]
-pub struct SpeechRequest {
-    text: String,
-    is_male: bool,
-}
-
-impl From<SpeechToUpload> for SpeechRequest {
-    fn from(this: SpeechToUpload) -> Self {
-        Self {
-            text: this.text,
-            is_male: this.is_male,
-        }
-    }
-}
-
-#[derive(Clone)]
-pub struct SpeechToUpload {
-    pub text: String,
-    pub is_male: bool,
-}
-
 pub struct SpeechGenerationOptions {}
-
-pub struct UploadResult {
-    url: Url,
-}
-
-impl UploadResult {
-    pub fn parse(url: &str) -> AppResult<Self> {
-        Ok(Self {
-            url: Url::parse(url)
-                .map_err(DataError::from)
-                .map_err(AppError::from)?,
-        })
-    }
-
-    pub fn url(&self) -> &Url {
-        &self.url
-    }
-}
 
 #[async_trait]
 pub trait AsyncHealth {
@@ -64,7 +23,10 @@ pub trait AsyncHealth {
 
 #[async_trait]
 pub trait AsyncUploader {
-    async fn upload(&self, request: &SpeechToUpload) -> AppResult<UploadResult>;
+    async fn upload(
+        &self,
+        request: crate::app_core::types::upload::Speech,
+    ) -> AppResult<UploadedSpeech>;
 }
 
 #[async_trait]
@@ -106,47 +68,29 @@ impl AppCore {
 
 #[derive(Clone)]
 pub struct Uploader {
-    client: Client,
+    wrapper: Arc<TtsWrapper>,
 }
+
 impl Uploader {
-    pub fn new(client: Client) -> Self {
-        Self { client }
+    pub fn new(wrapper: Arc<TtsWrapper>) -> Self {
+        Self { wrapper }
     }
 }
 
 #[async_trait]
 impl AsyncUploader for Uploader {
-    async fn upload(&self, request: &SpeechToUpload) -> AppResult<UploadResult> {
-        let req: SpeechRequest = request.clone().into();
-        (&self.client)
-            .post("http://localhost:8080/speak")
-            .json(&req)
-            .send()
-            .await
-            .log_err("Unable to upload the requested speech", LogLevel::Error)
-            .map_err(AppError::for_upload)?
-            .text()
-            .await
-            .log_err("Unable to retrieve the response", LogLevel::Error)
-            .map_err(AppError::for_upload)
-            .and_then(|url| UploadResult::parse(&url))
+    async fn upload(
+        &self,
+        request: crate::app_core::types::upload::Speech,
+    ) -> AppResult<UploadedSpeech> {
+        self.wrapper.upload(request.into()).await.map(Into::into)
     }
 }
 
 #[async_trait]
 impl AsyncHealth for Uploader {
     async fn is_healthy(&self) -> AppResult<()> {
-        (&self.client)
-            .post("http://localhost:8080/speak")
-            .json(&SpeechRequest {
-                text: "Prova".to_owned(),
-                is_male: true,
-            })
-            .send()
-            .await
-            .log_err("Uploader is not healthy", LogLevel::Warning)
-            .map_err(AppError::for_infrastructure)
-            .map(|_| ())
+        self.wrapper.health().await
     }
 }
 
