@@ -36,3 +36,58 @@ It'll start:
 - random phrase generator has to be implemented (now it's just a hardcoded struct...)
 - beautify errors in GQL responses
 - clean the messy code
+
+## Schema explanation
+
+### Phrase construction
+
+#### Non-terminal symbols
+|Column|Type|Description|
+|:---:|:---:|:------------|
+|ID|uuid|pretty obvious, isn't it?|
+| symbol | varchar(8) | name of a non-terminal BNF symbol |
+
+#### Rewrite rules
+|Column|Type|Description|
+|:---:|:---:|:------------|
+| ID | uuid | pretty obvious, isn't it? |
+| symbol_id | uuid | reference to non-terminal symbols |
+| production | varchar(1024) | replacement for the non-terminal symbol that can also contain other NTSs |
+
+### Dictionary
+
+#### Words
+
+|Column|Type|Description|
+|:---:|:---:|:------------|
+| ID | uuid | pretty obvious, isn't it? |
+| content | varchar(1024) | the actual content of the word |
+| non_repeatable | bit | should this word be used only once in the phrase? |
+
+##### Grammar tags
+
+|Column|Type|Description|
+|:---:|:---:|:------------|
+| ID | uuid | pretty obvious, isn't it? |
+| name | varchar(32) | a symbolic name |
+
+##### Words to Grammar tags
+
+|Column|Type|Description|
+|:---:|:---:|:------------|
+| word | uuid | FK to word |
+| grammar_tag | uuid | FK to grammar tags |
+
+##### Semantics
+
+|Column|Type|Description|
+|:---:|:---:|:------------|
+| ID | uuid | pretty obvious, isn't it? |
+| name | varchar(32) | a symbolic name |
+
+##### Words to semantics
+
+|Column|Type|Description|
+|:---:|:---:|:------------|
+| word | uuid | FK to word |
+| semantics | uuid | FK to semantics |
