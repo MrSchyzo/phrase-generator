@@ -22,22 +22,31 @@ BadQualWithComplementN -> PastPart da AnyS | PastPart ComplementModo da AnyS
 
 ## NTS
 
-### `{x:name:y}`
+### `{n:x:y:name}`
 
-x -> grammar order (depends on x-1, if x-1 exists, and context; "-" resets dependency)
-name -> identifier of the NTS
-y -> semantic order (depends on y-1, if y-1 exists, and context; "-" resets dependency)
+- `n`, `u32`: index of this NTS inside the production
+- `x`, `Option<u32>`: index of the grammar dependency
+- `y`, `Option<u32>`: index of the semantic dependency (same behaviour as `x`, but for semantics)
+  - `None` if this NTS' grammar is independent even of context
+  - `Some(n)` if this NTS' grammar depends only on context
+  - `Some(m)` if this NTS' grammar depends on context and another NTS/placeholder
+- `name`, `String`: symbolic name
 
+## Placeholder
 
-### `<x:s_tag:y>`
+### `<n:x:y:s_tags>`
 
-x -> grammar order (depends on x-1, if x-1 exists, and context; "-" resets dependency)
-s_tag -> semantic tag to pick
-y -> semantic order (depends on y-1, if y-1 exists, and context; "-" resets dependency)
+- `n`, `u32`: index of this NTS inside the production
+- `x`, `Option<u32>`: index of the grammar dependency
+- `y`, `Option<u32>`: index of the semantic dependency (same behaviour as `x`, but for semantics)
+  - `None` if this NTS' grammar is independent even of context
+  - `Some(n)` if this NTS' grammar depends only on context
+  - `Some(m)` if this NTS' grammar depends on context and another NTS/placeholder
+- `s_tags`, `Vec<String>`: symbolic name of the semantic tags needed 
 
 ---
 
 ### Non-repetition of words
 
-Everytime I want to select a word, I check my HashSet to exclude some words;
-When I select a new word that is `non_repeatable`, I add it to my hashset;
+Everytime I want to select a word, I check my `HashSet` to exclude some words;
+When I select a new word that is `non_repeatable`, I add it to my `HashSet`;
