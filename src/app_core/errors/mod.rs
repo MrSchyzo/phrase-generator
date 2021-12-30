@@ -1,3 +1,5 @@
+use std::num::ParseIntError;
+
 use thiserror::Error;
 
 #[derive(Error, Debug, Clone)]
@@ -16,6 +18,27 @@ impl AppError {
     }
     pub fn for_infrastructure(error: reqwest::Error) -> Self {
         InfrastructureError::from(error).into()
+    }
+    pub fn for_unrecognized_placeholder(placeholder: String) -> Self {
+        DataError::GrammarParseError(ParseError::RegexDidNotRecognize(placeholder)).into()
+    }
+    pub fn for_group_not_found(group_name: String, placeholder: String) -> Self {
+        DataError::GrammarParseError(ParseError::GroupNotFound(group_name, placeholder)).into()
+    }
+    pub fn for_number_parse_error(
+        number_string: String,
+        placeholder: String,
+        reason: ParseIntError,
+    ) -> Self {
+        DataError::GrammarParseError(ParseError::CannotParseToNumber(
+            number_string,
+            placeholder,
+            reason,
+        ))
+        .into()
+    }
+    pub fn for_unrecognized_dependency_marker(marker: String) -> Self {
+        DataError::GrammarParseError(ParseError::UnrecognizedDependencyMarker(marker)).into()
     }
 }
 
@@ -47,6 +70,8 @@ impl From<reqwest::Error> for InfrastructureError {
 pub enum DataError {
     #[error("URL cannot be parsed because {0:?}")]
     UrlParseError(#[from] url::ParseError),
+    #[error("Grammar regex error, {0:?}")]
+    GrammarParseError(#[from] ParseError),
 }
 
 #[derive(Error, Debug, Clone)]
@@ -59,4 +84,16 @@ impl From<reqwest::Error> for HttpError {
     fn from(error: reqwest::Error) -> Self {
         Self::ReqwestError(format!("{}", error))
     }
+}
+
+#[derive(Error, Debug, Clone)]
+pub enum ParseError {
+    #[error("regex did not recognize '{0}'")]
+    RegexDidNotRecognize(String),
+    #[error("unable to parse '{0}' to a number inside '{1}' because {2:?}")]
+    CannotParseToNumber(String, String, ParseIntError),
+    #[error("cannot find regex group '{0}' inside '{1}'")]
+    GroupNotFound(String, String),
+    #[error("cannot recognize dependency marker '{0}'")]
+    UnrecognizedDependencyMarker(String),
 }

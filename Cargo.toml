@@ -18,6 +18,8 @@ tracing = "0.1.29"
 tracing-subscriber = "0.3.4"
 url="2.2.2"
 futures="0.3.19"
+lazy_static="1.4.0"
+regex="1.5.4"
 
 [profile.release]
 lto = "thin"

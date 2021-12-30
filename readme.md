@@ -84,6 +84,7 @@ It'll start:
 |:---:|:---:|:------------|
 | ID | uuid | pretty obvious, isn't it? |
 | name | varchar(32) | a symbolic name |
+| sticky | bool | does this tag add to the current context? |
 
 ##### Words to semantics
 

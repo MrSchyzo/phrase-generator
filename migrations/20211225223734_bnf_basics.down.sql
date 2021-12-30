@@ -1,4 +1,3 @@
--- Add down migration script here
 DROP TABLE
   word_grammar,
   word_semantic,

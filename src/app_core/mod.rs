@@ -9,6 +9,7 @@ use crate::served::types::graphql::Speech;
 
 use self::errors::AppError;
 
+pub mod engine;
 pub mod errors;
 pub mod types;
 

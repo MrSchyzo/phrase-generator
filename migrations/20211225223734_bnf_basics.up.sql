@@ -1,4 +1,3 @@
--- Add up migration script here
 CREATE TABLE non_terminal_symbol (
   id serial primary key not null,
   name varchar(8) unique not null
@@ -26,7 +25,8 @@ CREATE TABLE grammar_tag (
 
 CREATE TABLE semantic_tag (
   id serial primary key not null,
-  name varchar(32) unique not null
+  name varchar(32) unique not null,
+  sticky boolean not null default TRUE
 );
 
 CREATE TABLE word_semantic (
