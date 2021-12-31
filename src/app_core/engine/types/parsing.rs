@@ -6,11 +6,11 @@ use regex::Regex;
 use crate::app_core::{errors::AppError, AppResult};
 
 #[cfg(test)]
-#[path = "./unit_tests/grammar.rs"]
-mod test;
+#[path = "./unit_tests/parsing.rs"]
+mod tests;
 
 lazy_static! {
-    static ref PLACEHOLDER: Regex = Regex::new(r"^(?P<id>\d|[1-9]\d*):(?P<g_dep>(?:N|C)|(?:O|CO)[(](?P<g_dep_id>\d|[1-9]\d*)[)]):(?P<g_prop>T|F):(?P<s_dep>(?:N|C)|(?:O|CO)[(](?P<s_dep_id>\d|[1-9]\d*)[)]):(?P<s_prop>T|F):(?P<reference>\w+)$").unwrap();
+    static ref PLACEHOLDER_DEFINITION: Regex = Regex::new(r"^(?P<id>\d|[1-9]\d*):(?P<g_dep>(?:N|C)|(?:O|CO)[(](?P<g_dep_id>\d|[1-9]\d*)[)]):(?P<g_prop>T|F):(?P<s_dep>(?:N|C)|(?:O|CO)[(](?P<s_dep_id>\d|[1-9]\d*)[)]):(?P<s_prop>T|F):(?P<reference>\w+)$").unwrap();
 }
 
 #[derive(PartialEq, Debug)]
@@ -55,7 +55,7 @@ impl FromStr for GrammarTokenReference {
     fn from_str(s: &str) -> Result<Self, Self::Err> {
         use crate::utils::regex::{EnhancedCaptures, EnhancedRegex};
 
-        let captures = PLACEHOLDER.try_capture(s)?;
+        let captures = PLACEHOLDER_DEFINITION.try_capture(s)?;
 
         Ok(Self {
             id: captures.i32_from_group("id")?,
