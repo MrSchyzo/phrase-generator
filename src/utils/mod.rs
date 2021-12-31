@@ -1,6 +1,8 @@
 use std::fmt::Display;
 use tracing::{debug, error, info, warn};
 
+pub mod regex;
+
 pub enum LogLevel {
     Debug,
     Info,

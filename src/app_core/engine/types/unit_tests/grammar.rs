@@ -205,7 +205,7 @@ fn grammar_token_reference_cannot_be_provided_with_numbers_that_overflow_32_bits
     let grammar_token_reference = GrammarTokenReference::from_str(&str);
     assert!(matches!(
         grammar_token_reference,
-        Err(AppError::Data(DataError::GrammarParseError(ParseError::CannotParseToNumber(number, s, error))))
-        if s.eq(&str) && number.eq(gigantic) && error.kind().eq(&std::num::IntErrorKind::PosOverflow)
+        Err(AppError::Data(DataError::GrammarParseError(ParseError::CannotParseToNumber(number, error))))
+        if number.eq(gigantic) && error.kind().eq(&std::num::IntErrorKind::PosOverflow)
     ))
 }

@@ -19,23 +19,15 @@ impl AppError {
     pub fn for_infrastructure(error: reqwest::Error) -> Self {
         InfrastructureError::from(error).into()
     }
-    pub fn for_unrecognized_placeholder(placeholder: String) -> Self {
-        DataError::GrammarParseError(ParseError::RegexDidNotRecognize(placeholder)).into()
+    pub fn for_regex_did_not_recognize(string_to_recognize: String) -> Self {
+        DataError::GrammarParseError(ParseError::RegexDidNotRecognize(string_to_recognize)).into()
     }
-    pub fn for_group_not_found(group_name: String, placeholder: String) -> Self {
-        DataError::GrammarParseError(ParseError::GroupNotFound(group_name, placeholder)).into()
+    pub fn for_group_not_found(group_name: String, string_to_recognize: String) -> Self {
+        DataError::GrammarParseError(ParseError::GroupNotFound(group_name, string_to_recognize))
+            .into()
     }
-    pub fn for_number_parse_error(
-        number_string: String,
-        placeholder: String,
-        reason: ParseIntError,
-    ) -> Self {
-        DataError::GrammarParseError(ParseError::CannotParseToNumber(
-            number_string,
-            placeholder,
-            reason,
-        ))
-        .into()
+    pub fn for_number_parse_error(number_string: String, reason: ParseIntError) -> Self {
+        DataError::GrammarParseError(ParseError::CannotParseToNumber(number_string, reason)).into()
     }
     pub fn for_unrecognized_dependency_marker(marker: String) -> Self {
         DataError::GrammarParseError(ParseError::UnrecognizedDependencyMarker(marker)).into()
@@ -90,8 +82,8 @@ impl From<reqwest::Error> for HttpError {
 pub enum ParseError {
     #[error("regex did not recognize '{0}'")]
     RegexDidNotRecognize(String),
-    #[error("unable to parse '{0}' to a number inside '{1}' because {2:?}")]
-    CannotParseToNumber(String, String, ParseIntError),
+    #[error("unable to parse '{0}' to a number because {1:?}")]
+    CannotParseToNumber(String, ParseIntError),
     #[error("cannot find regex group '{0}' inside '{1}'")]
     GroupNotFound(String, String),
     #[error("cannot recognize dependency marker '{0}'")]

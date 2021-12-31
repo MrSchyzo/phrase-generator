@@ -1,7 +1,7 @@
 use std::str::FromStr;
 
 use lazy_static::lazy_static;
-use regex::{Captures, Match, Regex};
+use regex::Regex;
 
 use crate::app_core::{errors::AppError, AppResult};
 
@@ -49,88 +49,31 @@ impl Dependency {
     }
 }
 
-impl GrammarTokenReference {
-    fn try_get_str_from_group<'r>(
-        captures: &'r Captures<'r>,
-        group: &str,
-        original_string: &str,
-    ) -> AppResult<&'r str> {
-        Self::try_get_group(captures, group, original_string).map(|m| m.as_str())
-    }
-
-    fn try_get_i32_from_group(
-        captures: &Captures,
-        group: &str,
-        original_string: &str,
-    ) -> AppResult<i32> {
-        let int = Self::try_get_str_from_group(captures, group, original_string)?;
-        i32::from_str(int).map_err(|err| {
-            AppError::for_number_parse_error(int.to_owned(), original_string.to_owned(), err)
-        })
-    }
-
-    fn maybe_i32_from_group(
-        captures: &Captures,
-        group: &str,
-        original_string: &str,
-    ) -> AppResult<Option<i32>> {
-        if let Some(int) = Self::maybe_group(captures, group) {
-            let int = int.as_str();
-            let result = i32::from_str(int).map_err(|err| {
-                AppError::for_number_parse_error(int.to_owned(), original_string.to_owned(), err)
-            })?;
-            Ok(Some(result))
-        } else {
-            Ok(None)
-        }
-    }
-
-    fn try_capture(s: &str) -> AppResult<Captures> {
-        PLACEHOLDER
-            .captures(s)
-            .ok_or_else(|| AppError::for_unrecognized_placeholder(s.to_owned()))
-    }
-
-    fn maybe_group<'r>(captures: &'r Captures<'r>, group: &str) -> Option<Match<'r>> {
-        captures.name(group)
-    }
-
-    fn try_get_group<'r>(
-        captures: &'r Captures<'r>,
-        group: &str,
-        original_string: &str,
-    ) -> AppResult<Match<'r>> {
-        captures.name(group).ok_or_else(|| {
-            AppError::for_group_not_found(group.to_owned(), original_string.to_owned())
-        })
-    }
-}
-
 impl FromStr for GrammarTokenReference {
     type Err = AppError;
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
-        let captures = Self::try_capture(s)?;
-        let g_dep_id = Self::maybe_i32_from_group(&captures, "g_dep_id", s)?;
-        let s_dep_id = Self::maybe_i32_from_group(&captures, "s_dep_id", s)?;
+        use crate::utils::regex::{EnhancedCaptures, EnhancedRegex};
+
+        let captures = PLACEHOLDER.try_capture(s)?;
 
         Ok(Self {
-            id: Self::try_get_i32_from_group(&captures, "id", s)?,
+            id: captures.i32_from_group("id")?,
             semantic_properties: PropagationProperties {
-                can_propagate: Self::try_get_str_from_group(&captures, "s_prop", s)?.eq("T"),
+                can_propagate: captures.parse_on_match("s_prop", Ok)?.eq("T"),
                 dependency: Dependency::from(
-                    s_dep_id,
-                    Self::try_get_str_from_group(&captures, "s_dep", s)?,
+                    captures.maybe_i32_from_group("s_dep_id")?,
+                    captures.parse_on_match("s_dep", Ok)?,
                 )?,
             },
             grammar_properties: PropagationProperties {
-                can_propagate: Self::try_get_str_from_group(&captures, "g_prop", s)?.eq("T"),
+                can_propagate: captures.parse_on_match("g_prop", Ok)?.eq("T"),
                 dependency: Dependency::from(
-                    g_dep_id,
-                    Self::try_get_str_from_group(&captures, "g_dep", s)?,
+                    captures.maybe_i32_from_group("g_dep_id")?,
+                    captures.parse_on_match("g_dep", Ok)?,
                 )?,
             },
-            reference: Self::try_get_str_from_group(&captures, "reference", s)?.to_owned(),
+            reference: captures.parse_on_match("reference", Ok)?.to_owned(),
         })
     }
 }
