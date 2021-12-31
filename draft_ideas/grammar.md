@@ -66,15 +66,15 @@ Different types of children:
 
 ### Resulting semantics
 Simplest case, no dependencies and context:
-1- find words with all `s_tags`, let's name it `w`;
+1- find a word with all `s_tags`, let's name it `w`;
 2- resulting semantics is `s_tags.filter(Tag::is_sticky) U w.semantics.filter(Tag::is_sticky)`.
 
 With context only, no dependencies:
-1- find words with all `s_tags` and at least a tag in `context.tags`, let's name it `w`;
+1- find a word with all `s_tags` and at least a tag in `context.tags`, let's name it `w`;
 2- resulting semantics is `s_tags.filter(Tag::is_sticky) U w.semantics.filter(Tag::is_sticky)`
 
 With dependencies and context:
-1- find words with all `s_tags` and at least a tag in `context.tags U dependency.tags`, let's name it `w`;
+1- find a word with all `s_tags` and at least a tag in `context.tags U dependency.tags`, let's name it `w`;
 2- resulting semantics is `s_tags.filter(Tag::is_sticky) U w.semantics.filter(Tag::is_sticky)`
 
 ---

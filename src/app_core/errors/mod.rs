@@ -10,6 +10,8 @@ pub enum AppError {
     Infrastructure(#[from] InfrastructureError),
     #[error("Some data produced an error. {0}")]
     Data(#[from] DataError),
+    #[error("Multiple errors: {0:?}")]
+    Multiple(Vec<AppError>),
 }
 
 impl AppError {
@@ -18,6 +20,9 @@ impl AppError {
     }
     pub fn for_infrastructure(error: reqwest::Error) -> Self {
         InfrastructureError::from(error).into()
+    }
+    pub fn for_multiple_errors(errors: Vec<AppError>) -> Self {
+        Self::Multiple(errors)
     }
     pub fn for_regex_did_not_recognize(string_to_recognize: String) -> Self {
         DataError::GrammarParseError(ParseError::RegexDidNotRecognize(string_to_recognize)).into()
@@ -64,6 +69,8 @@ pub enum DataError {
     UrlParseError(#[from] url::ParseError),
     #[error("Grammar regex error, {0:?}")]
     GrammarParseError(#[from] ParseError),
+    #[error("Grammar regex errors, {0:?}")]
+    GrammarParseErrors(Vec<ParseError>),
 }
 
 #[derive(Error, Debug, Clone)]

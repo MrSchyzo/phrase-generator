@@ -19,6 +19,35 @@ lazy_static! {
     static ref IS_PLACEHOLDER: Regex = Regex::new(r"^[<](?P<content>[^<>]+)[>]$").unwrap();
 }
 
+#[allow(dead_code)]
+pub struct ProductionBranch {
+    sequence: Vec<PlaceholderReference>,
+}
+
+impl FromStr for ProductionBranch {
+    type Err = AppError;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        let (successes, failures): (Vec<_>, Vec<_>) = s
+            .split(' ')
+            .into_iter()
+            .map(|str| str.trim())
+            .map(PlaceholderReference::from_str)
+            .into_iter()
+            .partition(Result::is_ok);
+
+        if failures.is_empty() {
+            Ok(Self {
+                sequence: successes.into_iter().flat_map(Result::ok).collect(),
+            })
+        } else {
+            Err(AppError::for_multiple_errors(
+                failures.into_iter().flat_map(Result::Err).collect(),
+            ))
+        }
+    }
+}
+
 #[derive(PartialEq, Debug)]
 pub enum PlaceholderReference {
     NonTerminalSymbol(GrammarTokenReference),

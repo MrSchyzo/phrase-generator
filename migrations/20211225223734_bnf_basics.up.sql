@@ -50,3 +50,9 @@ CREATE TABLE word_grammar (
 CREATE INDEX idx_word_grammar_word ON word_grammar (word);
 CREATE INDEX idx_word_grammar_grammar_tag ON word_grammar (grammar_tag);
 CREATE UNIQUE INDEX idx_word_grammar_uniqueness ON word_grammar (word, grammar_tag);
+
+create or replace function array_contains_and_intersects(whole int[], contained int[], intersects_with int[]) returns boolean as
+$$
+	select (whole @> contained and whole && intersects_with);
+$$ 
+language sql;
