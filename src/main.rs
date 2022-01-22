@@ -4,6 +4,7 @@ mod served;
 pub mod utils;
 
 use crate::app_core::{AppCore, PhraseGenerator, Uploader};
+use std::str::FromStr;
 use std::sync::Arc;
 
 use actix_web::web::{self, Data};
@@ -17,6 +18,7 @@ use served::types::graphql::QueryRoot;
 use sqlx::postgres::PgPoolOptions;
 use sqlx::FromRow;
 
+use crate::app_core::engine::types::{PlaceholderReference, ProductionBranch};
 use tracing::info;
 
 #[actix_web::main]
@@ -86,8 +88,6 @@ async fn foo() -> Result<(), Box<dyn std::error::Error>> {
         .await?;
 
     let sem: Vec<i32> = vec![1];
-
-    let mut conn = pool.acquire().await?;
     let query_template = format!("
         SELECT
             w.id as id, w.content as content, w.non_repeatable as non_repeatable, s.id as semantic_id, s.name as semantic_tag
@@ -106,13 +106,45 @@ async fn foo() -> Result<(), Box<dyn std::error::Error>> {
         query = query.bind(sem_tag);
     }
 
-    let mut rows = query.fetch(&mut conn);
+    let mut rows = query.fetch(&pool);
 
     while let Some(word) = rows.try_next().await? {
         println!(
             "{}: {} (non_repeatable? {}). {}, {}",
             word.id, word.content, word.non_repeatable, word.semantic_id, word.semantic_tag
         );
+    }
+    let query_template = "
+        select p.production
+        from production p
+        inner join non_terminal_symbol nts
+        on nts.id = p.non_terminal_symbol and nts.name = $1
+        order by nts_amount desc
+        limit 1;
+    "
+    .to_string();
+    let query = sqlx::query_as(&query_template).bind("Start");
+
+    let (row,): (String,) = query.fetch_one(&pool).await?;
+
+    println!("{row}");
+
+    let branch = ProductionBranch::from_str(&row)?;
+
+    for reference in branch.ordered_placeholder_references()?.iter() {
+        match reference {
+            PlaceholderReference::NonTerminalSymbol(nts_ref) => {
+                println!(
+                    "Grammar on nothing, {}; {}; can propagate? {}",
+                    nts_ref.id(),
+                    nts_ref.reference(),
+                    nts_ref.grammar_can_propagate()
+                );
+            }
+            PlaceholderReference::WordSelector(_) => {
+                println!("Word!")
+            }
+        }
     }
 
     Ok(())

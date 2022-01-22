@@ -10,6 +10,7 @@ actix-web="4.0.0-beta.15"
 async-trait = "0.1.52"
 async-graphql="3.0.17"
 async-graphql-actix-web="3.0.17"
+itertools = "0.10.3"
 rand = "0.8.4"
 reqwest={version = "0.11.6", features = ["json"]}
 serde="1.0.132"

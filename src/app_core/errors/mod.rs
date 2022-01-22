@@ -1,3 +1,4 @@
+use sqlx::Error;
 use std::num::ParseIntError;
 
 use thiserror::Error;
@@ -6,6 +7,8 @@ use thiserror::Error;
 pub enum AppError {
     #[error("Upload failed. {0}")]
     Upload(#[from] UploadError),
+    #[error("Generation failed. {0}")]
+    Generation(#[from] GenerationError),
     #[error("Infrastructure had an error. {0}")]
     Infrastructure(#[from] InfrastructureError),
     #[error("Some data produced an error. {0}")]
@@ -18,6 +21,9 @@ impl AppError {
     pub fn for_upload(error: reqwest::Error) -> Self {
         UploadError::from(error).into()
     }
+    pub fn for_generation(error: sqlx::Error) -> Self {
+        GenerationError::from(error).into()
+    }
     pub fn for_infrastructure(error: reqwest::Error) -> Self {
         InfrastructureError::from(error).into()
     }
@@ -25,17 +31,22 @@ impl AppError {
         Self::Multiple(errors)
     }
     pub fn for_regex_did_not_recognize(string_to_recognize: String) -> Self {
-        DataError::GrammarParseError(ParseError::RegexDidNotRecognize(string_to_recognize)).into()
+        DataError::GrammarParse(ParseError::RegexDidNotRecognize(string_to_recognize)).into()
     }
     pub fn for_group_not_found(group_name: String, string_to_recognize: String) -> Self {
-        DataError::GrammarParseError(ParseError::GroupNotFound(group_name, string_to_recognize))
-            .into()
+        DataError::GrammarParse(ParseError::GroupNotFound(group_name, string_to_recognize)).into()
     }
     pub fn for_number_parse_error(number_string: String, reason: ParseIntError) -> Self {
-        DataError::GrammarParseError(ParseError::CannotParseToNumber(number_string, reason)).into()
+        DataError::GrammarParse(ParseError::CannotParseToNumber(number_string, reason)).into()
     }
     pub fn for_unrecognized_dependency_marker(marker: String) -> Self {
-        DataError::GrammarParseError(ParseError::UnrecognizedDependencyMarker(marker)).into()
+        DataError::GrammarParse(ParseError::UnrecognizedDependencyMarker(marker)).into()
+    }
+    pub fn for_production_id_clash(clashing_id: i32) -> Self {
+        DataError::Production(ProductionError::IdClash(clashing_id)).into()
+    }
+    pub fn for_production_cycle_detected(cycle_ids: Vec<i32>) -> Self {
+        DataError::Production(ProductionError::CycleDetected(cycle_ids)).into()
     }
 }
 
@@ -43,6 +54,18 @@ impl AppError {
 pub enum UploadError {
     #[error("Server had problems connecting to its dependencies.")]
     HttpFailed(#[from] HttpError),
+}
+
+#[derive(Error, Debug, Clone)]
+pub enum GenerationError {
+    #[error("DB Error, {0}.")]
+    DBFailed(String),
+}
+
+impl From<sqlx::Error> for GenerationError {
+    fn from(e: Error) -> Self {
+        Self::DBFailed(format!("{e}"))
+    }
 }
 
 impl From<reqwest::Error> for UploadError {
@@ -66,11 +89,13 @@ impl From<reqwest::Error> for InfrastructureError {
 #[derive(Error, Debug, Clone)]
 pub enum DataError {
     #[error("URL cannot be parsed because {0:?}")]
-    UrlParseError(#[from] url::ParseError),
+    UrlParse(#[from] url::ParseError),
     #[error("Grammar regex error, {0:?}")]
-    GrammarParseError(#[from] ParseError),
+    GrammarParse(#[from] ParseError),
     #[error("Grammar regex errors, {0:?}")]
-    GrammarParseErrors(Vec<ParseError>),
+    GrammarParses(Vec<ParseError>),
+    #[error("Production is not well formed, {0:?}")]
+    Production(#[from] ProductionError),
 }
 
 #[derive(Error, Debug, Clone)]
@@ -95,4 +120,12 @@ pub enum ParseError {
     GroupNotFound(String, String),
     #[error("cannot recognize dependency marker '{0}'")]
     UnrecognizedDependencyMarker(String),
+}
+
+#[derive(Error, Debug, Clone)]
+pub enum ProductionError {
+    #[error("this production has an ID collision, a colliding ID is '{0}'")]
+    IdClash(i32),
+    #[error("a dependency cycle has been detected with a walk through the following ids: {0:?}")]
+    CycleDetected(Vec<i32>),
 }

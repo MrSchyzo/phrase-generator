@@ -62,7 +62,7 @@ Different types of children:
 - `ps`, `bool`: whether it propagates semantics to the parent
 - `s_tags`, `Vec<String>`: symbolic name of the semantic tags needed 
 
-### Resulting grammamr
+### Resulting grammar
 
 ### Resulting semantics
 Simplest case, no dependencies and context:

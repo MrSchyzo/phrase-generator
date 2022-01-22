@@ -49,16 +49,16 @@ impl<'r> EnhancedCaptures<'r> for Captures<'r> {
         }
     }
 
+    fn i32_from_group(&self, group: &str) -> AppResult<i32> {
+        self.named_group(group).and_then(|m| m.parsed_as_i32())
+    }
+
     fn parse_on_match<OUT: 'r, F: FnOnce(&'r str) -> AppResult<OUT>>(
         &'r self,
         group: &'r str,
         parser: F,
     ) -> AppResult<OUT> {
         self.named_group(group)?.parsed_with(parser)
-    }
-
-    fn i32_from_group(&self, group: &str) -> AppResult<i32> {
-        self.named_group(group).and_then(|m| m.parsed_as_i32())
     }
 }
 

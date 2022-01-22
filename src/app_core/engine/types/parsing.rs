@@ -14,19 +14,66 @@ lazy_static! {
 }
 
 #[derive(PartialEq, Debug)]
-pub struct GrammarTokenReference {
-    pub id: i32,
-    pub semantic_properties: PropagationProperties,
-    pub grammar_properties: PropagationProperties,
-    pub reference: String,
+pub struct TokenReference {
+    id: i32,
+    semantic_properties: PropagationProperties,
+    grammar_properties: PropagationProperties,
+    reference: String,
+}
+
+#[allow(dead_code)] //TODO: remove it
+impl TokenReference {
+    pub fn id(&self) -> i32 {
+        self.id
+    }
+    pub fn reference(&self) -> &str {
+        &self.reference
+    }
+
+    pub fn grammar_dependency_on_other(&self) -> Option<i32> {
+        self.grammar_properties
+            .dependency_to_other()
+            .filter(|other| other.ne(&self.id))
+    }
+    pub fn grammar_depends_on_context(&self) -> bool {
+        self.grammar_properties.depends_on_context()
+    }
+    pub fn grammar_can_propagate(&self) -> bool {
+        self.grammar_properties.can_propagate()
+    }
+
+    pub fn semantic_dependency_on_other(&self) -> Option<i32> {
+        self.semantic_properties
+            .dependency_to_other()
+            .filter(|other| other.ne(&self.id))
+    }
+    pub fn semantic_depends_on_context(&self) -> bool {
+        self.semantic_properties.depends_on_context()
+    }
+    pub fn semantic_can_propagate(&self) -> bool {
+        self.semantic_properties.can_propagate()
+    }
 }
 
 #[derive(PartialEq, Debug)]
 pub struct PropagationProperties {
-    pub can_propagate: bool,
-    pub dependency: Dependency,
+    can_propagate: bool,
+    dependency: Dependency,
 }
 
+impl PropagationProperties {
+    fn dependency_to_other(&self) -> Option<i32> {
+        self.dependency.dependency_to_other()
+    }
+    fn depends_on_context(&self) -> bool {
+        self.dependency.depends_on_context()
+    }
+    fn can_propagate(&self) -> bool {
+        self.can_propagate
+    }
+}
+
+#[allow(clippy::enum_variant_names)]
 #[derive(PartialEq, Debug)]
 pub enum Dependency {
     OnNothing,
@@ -47,9 +94,18 @@ impl Dependency {
             )),
         }
     }
+    fn dependency_to_other(&self) -> Option<i32> {
+        match self {
+            Dependency::OnNothing | Dependency::OnContext => None,
+            Dependency::On(id) | Dependency::OnContextAnd(id) => Some(*id),
+        }
+    }
+    fn depends_on_context(&self) -> bool {
+        matches!(self, Dependency::OnContextAnd(_) | Dependency::OnContext)
+    }
 }
 
-impl FromStr for GrammarTokenReference {
+impl FromStr for TokenReference {
     type Err = AppError;
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {

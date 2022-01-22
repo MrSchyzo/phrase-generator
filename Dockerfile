@@ -1,4 +1,4 @@
-FROM rust:1.57.0 as chef
+FROM rust:1.58.0 as chef
 WORKDIR /app
 RUN cargo install cargo-chef && apt update && apt install clang lld -y
 

@@ -1,9 +1,11 @@
+use std::str::FromStr;
 use std::sync::Arc;
 
 use crate::app_core::types::upload::UploadedSpeech;
 use crate::outgoing::tts_wrapper::TtsWrapper;
 use async_trait::async_trait;
 use rand::RngCore;
+use sqlx::postgres::PgPoolOptions;
 
 use crate::served::types::graphql::Speech;
 
@@ -12,6 +14,7 @@ use self::errors::AppError;
 pub mod engine;
 pub mod errors;
 pub mod types;
+use crate::app_core::engine::types::ProductionBranch;
 
 pub type AppResult<T> = Result<T, AppError>;
 
@@ -115,4 +118,45 @@ impl AsyncPhraseGenerator for PhraseGenerator {
             })
         }
     }
+}
+
+trait GenerationState {
+    fn increase_depth(&mut self);
+    fn decrease_depth(&mut self);
+    fn is_too_deep(&self) -> bool;
+
+    fn alter_length(&mut self, amount: i32);
+    fn is_too_long(&self) -> bool;
+
+    fn register_word(&mut self, word: &str);
+    fn has_used_word(&self, word: &str) -> bool;
+}
+
+#[allow(unused)]
+async fn random_production_step(
+    nts_name: &str,
+    mut state: Box<dyn GenerationState>,
+) -> AppResult<String> {
+    let pool = PgPoolOptions::new()
+        .max_connections(8)
+        .connect("postgres://postgres:password@localhost:49153/postgres")
+        .await
+        .map_err(AppError::for_generation)?;
+
+    let mut conn = pool.acquire().await.map_err(AppError::for_generation)?;
+    let query_template = include_str!("../../draft_ideas/select_random_production.sql");
+    let query = sqlx::query_as(query_template).bind(nts_name);
+
+    let (row,): (String,) = query
+        .fetch_one(&mut conn)
+        .await
+        .map_err(AppError::for_generation)?;
+
+    let branch = ProductionBranch::from_str(&row)?;
+
+    state.increase_depth();
+    let _placeholders = branch.ordered_placeholder_references()?;
+
+    state.decrease_depth();
+    Ok("".to_owned())
 }

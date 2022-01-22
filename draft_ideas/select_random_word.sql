@@ -14,17 +14,17 @@ select w.id, w."content", w.non_repeatable,
 from word w
 where array_contains_and_intersects(
 	(
-        select array_agg(ws.semantic_tag) 
-        from word_semantic ws 
-        where ws.word = w.id
-    ), 
+    select array_agg(ws.semantic_tag)
+    from word_semantic ws
+    where ws.word = w.id
+  ),
 	array[]::integer[], 
 	array[3,4]::integer[]
 )
 and (
-    select array_agg(wg.grammar_tag) 
-    from word_grammar wg 
-    where wg.word = w.id
+  select array_agg(wg.grammar_tag)
+  from word_grammar wg
+  where wg.word = w.id
 ) && array[1,3,8]::integer[]
 order by random()
 limit 1;

@@ -7,9 +7,11 @@ CREATE TABLE production (
   id serial primary key not null,
   non_terminal_symbol int not null,
   production varchar(1024) not null,
+  nts_amount int not null generated always as ((character_length(production) - character_length(replace(production, '{', '')))) stored,
   foreign key (non_terminal_symbol) references non_terminal_symbol (id)
 );
 CREATE INDEX idx_production_non_terminal_symbol ON production (non_terminal_symbol);
+CREATE INDEX idx_production_nts_amount ON production (nts_amount);
 
 CREATE TABLE word (
   id serial primary key not null,
