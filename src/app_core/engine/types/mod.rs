@@ -1,3 +1,4 @@
+use itertools::Itertools;
 use std::collections::{HashMap, HashSet};
 use std::str::FromStr;
 
@@ -53,6 +54,14 @@ impl ProductionBranch {
                     .unwrap_or_else(|| panic!("Unexpectedly unable to find node in lookup {}", i)))
             })
             .collect::<Vec<_>>())
+    }
+
+    #[allow(unused)]
+    pub fn placeholder_appearance_order_in_production(&self) -> Vec<i32> {
+        self.sequence
+            .iter()
+            .map(PlaceholderReference::id)
+            .collect_vec()
     }
 
     fn topologically_sorted(&self, graph: &HashMap<i32, Vec<i32>>) -> AppResult<Vec<i32>> {
@@ -149,7 +158,6 @@ impl PlaceholderReference {
             .and_then(TokenReference::from_str)
             .map(Self::WordSelector)
     }
-    #[allow(unused)]
     fn dependencies(&self) -> Vec<i32> {
         match self {
             PlaceholderReference::NonTerminalSymbol(reference)

@@ -1,4 +1,4 @@
-select w.id, w."content", w.non_repeatable,
+select w.id as id, w."content" as content, w.non_repeatable as non_repeatable,
 	( 
 		select array_agg(sem.semantic_tag) 
 		from word_semantic sem 
@@ -18,13 +18,13 @@ where array_contains_and_intersects(
     from word_semantic ws
     where ws.word = w.id
   ),
-	array[]::integer[], 
-	array[3,4]::integer[]
+	array[<SELECTED_SEMANTIC_TAGS_PLACEHOLDERS>]::integer[],
+	array[<CONTEXTUAL_SEMANTIC_TAGS_PLACEHOLDERS>]::integer[]
 )
 and (
   select array_agg(wg.grammar_tag)
   from word_grammar wg
   where wg.word = w.id
-) && array[1,3,8]::integer[]
+) && array[<CONTEXTUAL_GRAMMAR_TAGS_PLACEHOLDERS>]::integer[]
 order by random()
 limit 1;
