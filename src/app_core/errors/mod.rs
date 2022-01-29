@@ -21,7 +21,7 @@ impl AppError {
     pub fn for_upload(error: reqwest::Error) -> Self {
         UploadError::from(error).into()
     }
-    pub fn for_generation(error: sqlx::Error) -> Self {
+    pub fn for_generation_in_sql(error: sqlx::Error) -> Self {
         GenerationError::from(error).into()
     }
     pub fn for_infrastructure(error: reqwest::Error) -> Self {
@@ -60,6 +60,8 @@ pub enum UploadError {
 pub enum GenerationError {
     #[error("DB Error, {0}.")]
     DBFailed(String),
+    #[error("Generation overtook depth limit: last detected was {0}.")]
+    ExcessiveDepth(u16),
 }
 
 impl From<sqlx::Error> for GenerationError {

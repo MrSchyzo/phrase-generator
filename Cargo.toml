@@ -21,6 +21,7 @@ url="2.2.2"
 futures="0.3.19"
 lazy_static="1.4.0"
 regex="1.5.4"
+async-recursion = "1.0.0"
 
 [profile.release]
 lto = "thin"
