@@ -62,6 +62,8 @@ pub enum GenerationError {
     DBFailed(String),
     #[error("Generation overtook depth limit: last detected was {0}.")]
     ExcessiveDepth(u16),
+    #[error("Retrieving a non-existent generation sub-step")]
+    NonExistentSubStep,
 }
 
 impl From<sqlx::Error> for GenerationError {

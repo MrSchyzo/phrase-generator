@@ -127,9 +127,59 @@ impl AsyncPhraseGenerator for PhraseGenerator {
     }
 }
 
-trait GenerationState<Word: Sized + Hash + Send>: Send {
-    fn increase_depth(&mut self);
-    fn decrease_depth(&mut self);
+type TrivialGenerationSubStep = GenerationSubStep<i32, i32>;
+type TrivialGenerationState = dyn GenerationState<i32, i32, i32>;
+
+#[derive(Clone)]
+pub struct GenerationSubStep<
+    Semantics: Sized + Hash + Send + Clone + Eq,
+    Grammar: Sized + Hash + Send + Clone + Eq,
+> {
+    grammar_tags: HashSet<Grammar>,
+    semantic_tags: HashSet<Semantics>,
+}
+
+impl<Semantics: Sized + Hash + Send + Clone + Eq, Grammar: Sized + Hash + Send + Clone + Eq>
+    GenerationSubStep<Semantics, Grammar>
+{
+    pub fn new() -> Self {
+        Self {
+            grammar_tags: HashSet::new(),
+            semantic_tags: HashSet::new(),
+        }
+    }
+
+    pub fn add_grammar_tags(&mut self, tags: Vec<Grammar>) {
+        for tag in tags.into_iter() {
+            self.grammar_tags.insert(tag);
+        }
+    }
+
+    pub fn add_semantic_tags(&mut self, tags: Vec<Semantics>) {
+        for tag in tags.into_iter() {
+            self.semantic_tags.insert(tag);
+        }
+    }
+
+    pub fn deconstruct(&self) -> (Vec<&Semantics>, Vec<&Grammar>) {
+        (
+            self.semantic_tags.iter().collect_vec(),
+            self.grammar_tags.iter().collect_vec(),
+        )
+    }
+}
+
+trait GenerationState<
+    Word: Sized + Hash + Send,
+    Semantics: Sized + Hash + Send + Clone + Eq,
+    Grammar: Sized + Hash + Send + Clone + Eq,
+>: Send
+{
+    fn begin_generation_sub_step(&mut self);
+    fn propagate_semantics(&mut self, semantics: Vec<Semantics>) -> AppResult<()>;
+    fn current_context(&self) -> (Vec<&Semantics>, Vec<&Grammar>);
+    fn propagate_grammar(&mut self, grammar: Vec<Grammar>) -> AppResult<()>;
+    fn end_generation_sub_step(&mut self) -> Option<GenerationSubStep<Semantics, Grammar>>;
     fn current_depth(&self) -> u16;
     fn is_too_deep(&self) -> bool;
 
@@ -138,47 +188,74 @@ trait GenerationState<Word: Sized + Hash + Send>: Send {
 
     fn register_word(&mut self, word: Word);
     fn unregister_word(&mut self, word: &Word);
+    fn used_words(&self) -> Vec<&Word>;
     fn has_used_word(&self, word: &Word) -> bool;
 }
 
 pub struct InMemoryGenerationState {
-    depth: u16,
     max_depth: u16,
 
     length: i32,
     max_length: i32,
 
     used_words: HashSet<i32>,
+    sub_steps: Vec<TrivialGenerationSubStep>,
+
+    current_sub_step: TrivialGenerationSubStep,
 }
 
 impl InMemoryGenerationState {
     #[allow(unused)]
     pub fn new(max_depth: u16, max_length: i32) -> Self {
         Self {
-            depth: 0u16,
             max_depth,
             length: 0i32,
             max_length,
             used_words: HashSet::new(),
+            sub_steps: Vec::new(),
+            current_sub_step: GenerationSubStep::new(),
         }
     }
 }
 
-impl GenerationState<i32> for InMemoryGenerationState {
-    fn increase_depth(&mut self) {
-        self.depth += 1
+impl GenerationState<i32, i32, i32> for InMemoryGenerationState {
+    fn begin_generation_sub_step(&mut self) {
+        self.sub_steps.push(self.current_sub_step.clone());
+        self.current_sub_step = GenerationSubStep::new()
     }
 
-    fn decrease_depth(&mut self) {
-        self.depth -= 1
+    fn propagate_semantics(&mut self, semantics: Vec<i32>) -> AppResult<()> {
+        if let Some(sub_step) = self.sub_steps.last_mut() {
+            sub_step.add_semantic_tags(semantics);
+            return Ok(());
+        }
+
+        Err(GenerationError::NonExistentSubStep.into())
+    }
+
+    fn current_context(&self) -> (Vec<&i32>, Vec<&i32>) {
+        self.current_sub_step.deconstruct()
+    }
+
+    fn propagate_grammar(&mut self, grammar: Vec<i32>) -> AppResult<()> {
+        if let Some(sub_step) = self.sub_steps.last_mut() {
+            sub_step.add_grammar_tags(grammar);
+            return Ok(());
+        }
+
+        Err(GenerationError::NonExistentSubStep.into())
+    }
+
+    fn end_generation_sub_step(&mut self) -> Option<TrivialGenerationSubStep> {
+        self.sub_steps.pop()
     }
 
     fn current_depth(&self) -> u16 {
-        self.depth
+        self.sub_steps.len() as u16
     }
 
     fn is_too_deep(&self) -> bool {
-        self.depth > self.max_depth
+        self.current_depth() > self.max_depth
     }
 
     fn alter_length(&mut self, amount: i32) {
@@ -195,6 +272,10 @@ impl GenerationState<i32> for InMemoryGenerationState {
 
     fn unregister_word(&mut self, word: &i32) {
         self.used_words.remove(word);
+    }
+
+    fn used_words(&self) -> Vec<&i32> {
+        self.used_words.iter().collect_vec()
     }
 
     fn has_used_word(&self, word: &i32) -> bool {
@@ -215,7 +296,7 @@ async fn generate_phrase(_: SpeechGenerationOptions) -> AppResult<Speech> {
 #[async_recursion]
 async fn random_production_step(
     nts_name: &str,
-    state: &mut dyn GenerationState<i32>,
+    state: &mut TrivialGenerationSubStep,
 ) -> AppResult<String> {
     let pool = PgPoolOptions::new()
         .max_connections(8)
@@ -242,7 +323,7 @@ async fn random_production_step(
 #[async_recursion]
 async fn generate_from_placeholder(
     placeholder: &PlaceholderReference,
-    state: &mut dyn GenerationState<i32>,
+    state: &mut TrivialGenerationState,
     pool: &Pool<Postgres>,
 ) -> AppResult<String> {
     match placeholder {
@@ -259,7 +340,7 @@ async fn generate_from_placeholder(
 #[async_recursion]
 async fn generate_from_non_terminal_symbol(
     token: &TokenReference,
-    state: &mut dyn GenerationState<i32>,
+    state: &mut TrivialGenerationState,
     pool: &Pool<Postgres>,
 ) -> AppResult<String> {
     if state.is_too_deep() {
@@ -282,14 +363,14 @@ async fn generate_from_non_terminal_symbol(
 
     let mut generation_lookup: HashMap<i32, String> = HashMap::new();
 
-    state.increase_depth();
+    state.begin_generation_sub_step();
     for placeholder in branch.ordered_placeholder_references()? {
         generation_lookup.insert(
             placeholder.id(),
             generate_from_placeholder(placeholder, state, pool).await?,
         );
     }
-    state.decrease_depth();
+    state.end_generation_sub_step();
 
     let result = branch
         .placeholder_appearance_order_in_production()
@@ -316,20 +397,45 @@ struct SelectedWord {
 #[async_recursion]
 async fn generate_from_word_selector(
     token: &TokenReference,
-    _state: &mut dyn GenerationState<i32>,
+    state: &mut TrivialGenerationState,
     pool: &Pool<Postgres>,
 ) -> AppResult<String> {
-    //all of them
     let search_tag_names = token.reference().split(',').map(|s| s.trim()).collect_vec();
     let search_tags = retrieve_tag_ids_from_strings(&(search_tag_names), pool).await?;
-    //any of them
-    let semantic_tags = vec![1, 2, 3];
-    //any of them
-    let grammar_tags = vec![1, 2, 3];
-    //any of them
-    let context_grammar_tags = vec![2, 3, 4];
-    //any of them
-    let context_semantic_tags = vec![3, 4, 5];
+    let used_words = state.used_words();
+
+    let (context_semantics, context_grammar) = state.current_context();
+
+    let semantic_tags = match (
+        token.semantic_dependency_on_other(),
+        token.semantic_depends_on_context(),
+    ) {
+        (None, false) => {
+            vec![]
+        }
+        (None, true) => context_semantics,
+        (Some(id), false) => {
+            todo!("Extract semantics from precomputed ID")
+        }
+        (Some(id), true) => {
+            todo!("Extract semantics from precomputed ID and context")
+        }
+    };
+    let grammar_tags = match (
+        token.semantic_dependency_on_other(),
+        token.semantic_depends_on_context(),
+    ) {
+        (None, false) => {
+            vec![]
+        }
+        (None, true) => context_grammar,
+        (Some(id), false) => {
+            todo!("Extract semantics from precomputed ID")
+        }
+        (Some(id), true) => {
+            todo!("Extract semantics from precomputed ID and context")
+        }
+    };
 
     let template = include_str!("../../draft_ideas/select_random_word.sql")
         .replace(
@@ -352,14 +458,27 @@ async fn generate_from_word_selector(
                 .map(|i| format!("${}", i + search_tags.len() + semantic_tags.len() + 1))
                 .join(",")
                 .as_str(),
+        )
+        .replace(
+            "<USED_WORDS>",
+            (0..used_words.len())
+                .map(|i| {
+                    format!(
+                        "${}",
+                        i + search_tags.len() + semantic_tags.len() + grammar_tags.len() + 1
+                    )
+                })
+                .join(",")
+                .as_str(),
         );
 
     let mut query = sqlx::query_as::<sqlx::Postgres, SelectedWord>(&template);
 
     for &tag in search_tags
         .iter()
-        .chain(semantic_tags.iter())
-        .chain(grammar_tags.iter())
+        .chain(semantic_tags.into_iter())
+        .chain(grammar_tags.into_iter())
+        .chain(used_words.into_iter())
     {
         query = query.bind(tag);
     }
@@ -369,7 +488,19 @@ async fn generate_from_word_selector(
         .await
         .map_err(AppError::for_generation_in_sql)?;
 
-    Ok("to".to_owned())
+    if token.grammar_can_propagate() {
+        state.propagate_grammar(selected_word.grammar_output)?;
+    }
+
+    if token.semantic_can_propagate() {
+        state.propagate_semantics(selected_word.semantic_output)?;
+    }
+
+    if selected_word.non_repeatable {
+        state.register_word(selected_word.id)
+    }
+
+    Ok(selected_word.content)
 }
 
 async fn retrieve_tag_ids_from_strings(

@@ -26,5 +26,8 @@ and (
   from word_grammar wg
   where wg.word = w.id
 ) && array[<CONTEXTUAL_GRAMMAR_TAGS_PLACEHOLDERS>]::integer[]
+and (
+  id not in (<USED_WORDS>)
+)
 order by random()
 limit 1;

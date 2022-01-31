@@ -38,7 +38,7 @@ BadQualWithComplementN -> PastPart da AnyS | PastPart ComplementModo da AnyS
 ### Resulting grammar
 
 ### Resulting semantics
-Simplest case, only one placeholder:
+The simplest case, only one placeholder:
 1- resulting semantics is the placeholder's semantics;
 
 More placeholders:
