@@ -36,7 +36,10 @@ impl AppError {
     pub fn for_generation_non_existent_sub_step() -> Self {
         GenerationError::NonExistentSubStep.into()
     }
-    pub fn for_infrastructure(error: reqwest::Error) -> Self {
+    pub fn for_infrastructure_http_client_failed(error: reqwest::Error) -> Self {
+        InfrastructureError::from(error).into()
+    }
+    pub fn for_infrastructure_db_connections_unavailable(error: sqlx::Error) -> Self {
         InfrastructureError::from(error).into()
     }
     pub fn for_multiple_errors(errors: Vec<AppError>) -> Self {
@@ -90,6 +93,12 @@ impl From<sqlx::Error> for GenerationError {
     }
 }
 
+impl From<sqlx::Error> for InfrastructureError {
+    fn from(e: Error) -> Self {
+        Self::DBConnectionsUnavailable(format!("{e}"))
+    }
+}
+
 impl From<reqwest::Error> for UploadError {
     fn from(error: reqwest::Error) -> Self {
         HttpError::from(error).into()
@@ -100,6 +109,8 @@ impl From<reqwest::Error> for UploadError {
 pub enum InfrastructureError {
     #[error("Client is not available because: {0}")]
     ClientNotAvailable(#[from] HttpError),
+    #[error("No DB connection seems available: {0}")]
+    DBConnectionsUnavailable(String),
 }
 
 impl From<reqwest::Error> for InfrastructureError {

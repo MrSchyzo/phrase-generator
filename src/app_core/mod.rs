@@ -10,7 +10,6 @@ use async_recursion::async_recursion;
 use async_trait::async_trait;
 use itertools::Itertools;
 use rand::RngCore;
-use sqlx::postgres::PgPoolOptions;
 use sqlx::FromRow;
 use sqlx::{Pool, Postgres};
 
@@ -22,6 +21,7 @@ pub mod types;
 use crate::app_core::engine::types::parsing::TokenReference;
 use crate::app_core::engine::types::{PlaceholderReference, ProductionBranch};
 use crate::app_core::errors::GenerationError;
+use crate::utils::{LogLevel, Loggable};
 
 pub type AppResult<T> = Result<T, AppError>;
 
@@ -48,8 +48,11 @@ pub trait AsyncPhraseGenerator {
 #[async_trait]
 pub trait AsyncHealthyUploader: AsyncUploader + AsyncHealth {}
 
+#[async_trait]
+pub trait AsyncHealthyPhraseGenerator: AsyncPhraseGenerator + AsyncHealth {}
+
 type AppUploader = dyn AsyncHealthyUploader + Send + Sync;
-type AppPhraseGenerator = dyn AsyncPhraseGenerator + Send + Sync;
+type AppPhraseGenerator = dyn AsyncHealthyPhraseGenerator + Send + Sync;
 
 pub struct AppCore {
     uploader: Arc<AppUploader>,
@@ -73,7 +76,14 @@ impl AppCore {
     }
 
     pub async fn is_healthy(&self) -> AppResult<()> {
-        self.uploader().is_healthy().await
+        let (generator_res, uploader_res) =
+            futures::join!(self.generator().is_healthy(), self.uploader().is_healthy());
+
+        if generator_res.is_err() {
+            generator_res
+        } else {
+            uploader_res
+        }
     }
 }
 
@@ -108,13 +118,21 @@ impl AsyncHealth for Uploader {
 #[async_trait]
 impl AsyncHealthyUploader for Uploader {}
 
-pub struct PhraseGenerator;
+pub struct PhraseGenerator {
+    pool: Arc<Pool<Postgres>>,
+}
+
+impl PhraseGenerator {
+    pub fn new(pool: Arc<Pool<Postgres>>) -> Self {
+        Self { pool }
+    }
+}
 
 #[async_trait]
 impl AsyncPhraseGenerator for PhraseGenerator {
     async fn generate(&self, opts: SpeechGenerationOptions) -> AppResult<Speech> {
         if rand::thread_rng().next_u32() % 100 > 2 {
-            generate_phrase(opts).await
+            generate_phrase(opts, self.pool.as_ref()).await
         } else {
             Ok(Speech {
                 id: "3".to_owned(),
@@ -123,6 +141,21 @@ impl AsyncPhraseGenerator for PhraseGenerator {
         }
     }
 }
+
+#[async_trait]
+impl AsyncHealth for PhraseGenerator {
+    async fn is_healthy(&self) -> AppResult<()> {
+        self.pool
+            .acquire()
+            .await
+            .map(|_| ())
+            .map_err(AppError::for_infrastructure_db_connections_unavailable)
+            .log_err("DB is not healthy", LogLevel::Warning)
+    }
+}
+
+#[async_trait]
+impl AsyncHealthyPhraseGenerator for PhraseGenerator {}
 
 type TrivialGenerationSubStep = GenerationSubStep<i32, i32, i32>;
 type TrivialGenerationState = dyn GenerationState<i32, i32, i32, i32>;
@@ -341,19 +374,13 @@ impl GenerationState<i32, i32, i32, i32> for InMemoryGenerationState {
     }
 }
 
-async fn generate_phrase(_: SpeechGenerationOptions) -> AppResult<Speech> {
-    //TODO: sorry, too many clients already.
-    let pool = PgPoolOptions::new()
-        .max_connections(8)
-        .connect("postgres://postgres:password@localhost:49153/postgres")
-        .await
-        .map_err(AppError::for_generation_in_sql)?;
+async fn generate_phrase(_: SpeechGenerationOptions, pool: &Pool<Postgres>) -> AppResult<Speech> {
     let mut state = InMemoryGenerationState::new(100, 500);
 
     generate_from_non_terminal_symbol(
         &TokenReference::new_trivial_reference("Start".to_owned()),
         &mut state,
-        &pool,
+        pool,
     )
     .await
     .map(|s| Speech {
