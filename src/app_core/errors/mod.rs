@@ -24,6 +24,18 @@ impl AppError {
     pub fn for_generation_in_sql(error: sqlx::Error) -> Self {
         GenerationError::from(error).into()
     }
+    pub fn for_generation_no_words_found() -> Self {
+        GenerationError::NoWordsFound.into()
+    }
+    pub fn for_generation_no_production_branches_found(name: String) -> Self {
+        GenerationError::NoProductionBranchesFound(name).into()
+    }
+    pub fn for_generation_non_registered_placeholder(placeholder_id: i32) -> Self {
+        GenerationError::NonRegisteredPlaceholder(placeholder_id).into()
+    }
+    pub fn for_generation_non_existent_sub_step() -> Self {
+        GenerationError::NonExistentSubStep.into()
+    }
     pub fn for_infrastructure(error: reqwest::Error) -> Self {
         InfrastructureError::from(error).into()
     }
@@ -64,6 +76,12 @@ pub enum GenerationError {
     ExcessiveDepth(u16),
     #[error("Retrieving a non-existent generation sub-step")]
     NonExistentSubStep,
+    #[error("Retrieving a non-registered placeholder for the current generation: {0}")]
+    NonRegisteredPlaceholder(i32),
+    #[error("Unable to find any suitable word during word resolution.")]
+    NoWordsFound,
+    #[error("Unable to find any suitable production branches for NTS named '{0}'")]
+    NoProductionBranchesFound(String),
 }
 
 impl From<sqlx::Error> for GenerationError {

@@ -23,6 +23,15 @@ pub struct TokenReference {
 
 #[allow(dead_code)] //TODO: remove it
 impl TokenReference {
+    pub fn new_trivial_reference(reference: String) -> Self {
+        Self {
+            id: 0i32,
+            semantic_properties: PropagationProperties::empty(),
+            grammar_properties: PropagationProperties::empty(),
+            reference,
+        }
+    }
+
     pub fn id(&self) -> i32 {
         self.id
     }
@@ -62,6 +71,12 @@ pub struct PropagationProperties {
 }
 
 impl PropagationProperties {
+    fn empty() -> Self {
+        Self {
+            can_propagate: false,
+            dependency: Dependency::OnNothing,
+        }
+    }
     fn dependency_to_other(&self) -> Option<i32> {
         self.dependency.dependency_to_other()
     }

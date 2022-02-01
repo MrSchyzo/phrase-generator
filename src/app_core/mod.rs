@@ -112,12 +112,9 @@ pub struct PhraseGenerator;
 
 #[async_trait]
 impl AsyncPhraseGenerator for PhraseGenerator {
-    async fn generate(&self, _: SpeechGenerationOptions) -> AppResult<Speech> {
-        if rand::thread_rng().next_u32() % 100 > 50 {
-            Ok(Speech {
-                id: "1".to_owned(),
-                text: "Ciao mondo".to_owned(),
-            })
+    async fn generate(&self, opts: SpeechGenerationOptions) -> AppResult<Speech> {
+        if rand::thread_rng().next_u32() % 100 > 2 {
+            generate_phrase(opts).await
         } else {
             Ok(Speech {
                 id: "3".to_owned(),
@@ -127,61 +124,108 @@ impl AsyncPhraseGenerator for PhraseGenerator {
     }
 }
 
-type TrivialGenerationSubStep = GenerationSubStep<i32, i32>;
-type TrivialGenerationState = dyn GenerationState<i32, i32, i32>;
+type TrivialGenerationSubStep = GenerationSubStep<i32, i32, i32>;
+type TrivialGenerationState = dyn GenerationState<i32, i32, i32, i32>;
 
 #[derive(Clone)]
 pub struct GenerationSubStep<
+    Placeholder: Sized + Hash + Send + Clone + Eq,
     Semantics: Sized + Hash + Send + Clone + Eq,
     Grammar: Sized + Hash + Send + Clone + Eq,
 > {
-    grammar_tags: HashSet<Grammar>,
-    semantic_tags: HashSet<Semantics>,
+    grammar_context: HashSet<Grammar>,
+    semantic_context: HashSet<Semantics>,
+
+    grammar_lookup: HashMap<Placeholder, HashSet<Grammar>>,
+    semantics_lookup: HashMap<Placeholder, HashSet<Semantics>>,
 }
 
-impl<Semantics: Sized + Hash + Send + Clone + Eq, Grammar: Sized + Hash + Send + Clone + Eq>
-    GenerationSubStep<Semantics, Grammar>
+impl<
+        Placeholder: Sized + Hash + Send + Clone + Eq,
+        Semantics: Sized + Hash + Send + Clone + Eq,
+        Grammar: Sized + Hash + Send + Clone + Eq,
+    > GenerationSubStep<Placeholder, Semantics, Grammar>
 {
     pub fn new() -> Self {
         Self {
-            grammar_tags: HashSet::new(),
-            semantic_tags: HashSet::new(),
+            grammar_context: HashSet::new(),
+            semantic_context: HashSet::new(),
+            grammar_lookup: HashMap::new(),
+            semantics_lookup: HashMap::new(),
         }
     }
 
-    pub fn add_grammar_tags(&mut self, tags: Vec<Grammar>) {
+    pub fn propagate_grammar_tags(&mut self, tags: Vec<Grammar>) {
         for tag in tags.into_iter() {
-            self.grammar_tags.insert(tag);
+            self.grammar_context.insert(tag);
         }
     }
 
-    pub fn add_semantic_tags(&mut self, tags: Vec<Semantics>) {
+    pub fn propagate_semantic_tags(&mut self, tags: Vec<Semantics>) {
         for tag in tags.into_iter() {
-            self.semantic_tags.insert(tag);
+            self.semantic_context.insert(tag);
         }
     }
 
-    pub fn deconstruct(&self) -> (Vec<&Semantics>, Vec<&Grammar>) {
+    pub fn register_grammar_tags(&mut self, placeholder: Placeholder, tags: Vec<Grammar>) -> bool {
+        self.grammar_lookup
+            .insert(placeholder, tags.into_iter().collect())
+            == None
+    }
+
+    pub fn register_semantic_tags(
+        &mut self,
+        placeholder: Placeholder,
+        tags: Vec<Semantics>,
+    ) -> bool {
+        self.semantics_lookup
+            .insert(placeholder, tags.into_iter().collect())
+            == None
+    }
+
+    pub fn get_grammar_of(&self, placeholder: &Placeholder) -> Option<Vec<&Grammar>> {
+        self.grammar_lookup
+            .get(placeholder)
+            .map(|grammar| grammar.iter().collect_vec())
+    }
+
+    pub fn get_semantics_of(&self, placeholder: &Placeholder) -> Option<Vec<&Semantics>> {
+        self.semantics_lookup
+            .get(placeholder)
+            .map(|grammar| grammar.iter().collect_vec())
+    }
+
+    pub fn deconstruct_context(&self) -> (Vec<&Semantics>, Vec<&Grammar>) {
         (
-            self.semantic_tags.iter().collect_vec(),
-            self.grammar_tags.iter().collect_vec(),
+            self.semantic_context.iter().collect_vec(),
+            self.grammar_context.iter().collect_vec(),
         )
     }
 }
 
 trait GenerationState<
-    Word: Sized + Hash + Send,
+    Word: Sized + Hash + Send + Clone + Eq,
+    Placeholder: Sized + Hash + Send + Clone + Eq,
     Semantics: Sized + Hash + Send + Clone + Eq,
     Grammar: Sized + Hash + Send + Clone + Eq,
 >: Send
 {
     fn begin_generation_sub_step(&mut self);
-    fn propagate_semantics(&mut self, semantics: Vec<Semantics>) -> AppResult<()>;
-    fn current_context(&self) -> (Vec<&Semantics>, Vec<&Grammar>);
-    fn propagate_grammar(&mut self, grammar: Vec<Grammar>) -> AppResult<()>;
-    fn end_generation_sub_step(&mut self) -> Option<GenerationSubStep<Semantics, Grammar>>;
+    fn end_generation_sub_step(
+        &mut self,
+    ) -> Option<GenerationSubStep<Placeholder, Semantics, Grammar>>;
+
     fn current_depth(&self) -> u16;
     fn is_too_deep(&self) -> bool;
+
+    fn propagate_semantics(&mut self, semantics: Vec<Semantics>);
+    fn propagate_grammar(&mut self, grammar: Vec<Grammar>);
+    fn current_context(&self) -> (Vec<&Semantics>, Vec<&Grammar>);
+
+    fn register_semantics(&mut self, placeholder: Placeholder, semantics: Vec<Semantics>) -> bool;
+    fn register_grammar(&mut self, placeholder: Placeholder, grammar: Vec<Grammar>) -> bool;
+    fn extract_placeholder_semantics(&self, placeholder: &Placeholder) -> Option<Vec<&Semantics>>;
+    fn extract_placeholder_grammar(&self, placeholder: &Placeholder) -> Option<Vec<&Grammar>>;
 
     fn alter_length(&mut self, amount: i32);
     fn is_too_long(&self) -> bool;
@@ -218,36 +262,20 @@ impl InMemoryGenerationState {
     }
 }
 
-impl GenerationState<i32, i32, i32> for InMemoryGenerationState {
+impl GenerationState<i32, i32, i32, i32> for InMemoryGenerationState {
     fn begin_generation_sub_step(&mut self) {
         self.sub_steps.push(self.current_sub_step.clone());
         self.current_sub_step = GenerationSubStep::new()
     }
 
-    fn propagate_semantics(&mut self, semantics: Vec<i32>) -> AppResult<()> {
-        if let Some(sub_step) = self.sub_steps.last_mut() {
-            sub_step.add_semantic_tags(semantics);
-            return Ok(());
-        }
-
-        Err(GenerationError::NonExistentSubStep.into())
-    }
-
-    fn current_context(&self) -> (Vec<&i32>, Vec<&i32>) {
-        self.current_sub_step.deconstruct()
-    }
-
-    fn propagate_grammar(&mut self, grammar: Vec<i32>) -> AppResult<()> {
-        if let Some(sub_step) = self.sub_steps.last_mut() {
-            sub_step.add_grammar_tags(grammar);
-            return Ok(());
-        }
-
-        Err(GenerationError::NonExistentSubStep.into())
-    }
-
     fn end_generation_sub_step(&mut self) -> Option<TrivialGenerationSubStep> {
-        self.sub_steps.pop()
+        if let Some(sub_step) = self.sub_steps.pop() {
+            let current_sub_step = self.current_sub_step.clone();
+            self.current_sub_step = sub_step;
+            return Some(current_sub_step);
+        }
+
+        None
     }
 
     fn current_depth(&self) -> u16 {
@@ -256,6 +284,36 @@ impl GenerationState<i32, i32, i32> for InMemoryGenerationState {
 
     fn is_too_deep(&self) -> bool {
         self.current_depth() > self.max_depth
+    }
+
+    fn propagate_semantics(&mut self, semantics: Vec<i32>) {
+        self.current_sub_step.propagate_semantic_tags(semantics)
+    }
+
+    fn propagate_grammar(&mut self, grammar: Vec<i32>) {
+        self.current_sub_step.propagate_grammar_tags(grammar)
+    }
+
+    fn current_context(&self) -> (Vec<&i32>, Vec<&i32>) {
+        self.current_sub_step.deconstruct_context()
+    }
+
+    fn register_semantics(&mut self, placeholder: i32, semantics: Vec<i32>) -> bool {
+        self.current_sub_step
+            .register_semantic_tags(placeholder, semantics)
+    }
+
+    fn register_grammar(&mut self, placeholder: i32, grammar: Vec<i32>) -> bool {
+        self.current_sub_step
+            .register_grammar_tags(placeholder, grammar)
+    }
+
+    fn extract_placeholder_semantics(&self, placeholder: &i32) -> Option<Vec<&i32>> {
+        self.current_sub_step.get_semantics_of(placeholder)
+    }
+
+    fn extract_placeholder_grammar(&self, placeholder: &i32) -> Option<Vec<&i32>> {
+        self.current_sub_step.get_grammar_of(placeholder)
     }
 
     fn alter_length(&mut self, amount: i32) {
@@ -285,38 +343,23 @@ impl GenerationState<i32, i32, i32> for InMemoryGenerationState {
 
 #[allow(unused)]
 async fn generate_phrase(_: SpeechGenerationOptions) -> AppResult<Speech> {
-    let mut _a = InMemoryGenerationState::new(100, 500);
-    Ok(Speech {
-        id: "".to_string(),
-        text: "".to_string(),
-    })
-}
-
-#[allow(unused)]
-#[async_recursion]
-async fn random_production_step(
-    nts_name: &str,
-    state: &mut TrivialGenerationSubStep,
-) -> AppResult<String> {
     let pool = PgPoolOptions::new()
         .max_connections(8)
         .connect("postgres://postgres:password@localhost:49153/postgres")
         .await
         .map_err(AppError::for_generation_in_sql)?;
+    let mut state = InMemoryGenerationState::new(100, 500);
 
-    let query_template = include_str!("../../draft_ideas/select_random_production.sql");
-    let query = sqlx::query_as(query_template).bind(nts_name);
-
-    let (row,): (String,) = query
-        .fetch_one(&pool)
-        .await
-        .map_err(AppError::for_generation_in_sql)?;
-
-    let branch = ProductionBranch::from_str(&row)?;
-
-    let _placeholders = branch.ordered_placeholder_references()?;
-
-    Ok("".to_owned())
+    generate_from_non_terminal_symbol(
+        &TokenReference::new_trivial_reference("Start".to_owned()),
+        &mut state,
+        &pool,
+    )
+    .await
+    .map(|s| Speech {
+        id: "1".to_string(),
+        text: s,
+    })
 }
 
 #[allow(unused)]
@@ -347,30 +390,30 @@ async fn generate_from_non_terminal_symbol(
         return Err(GenerationError::ExcessiveDepth(state.current_depth()).into());
     }
 
-    let template = if state.is_too_long() {
-        include_str!("../../draft_ideas/select_random_production.sql")
-    } else {
-        include_str!("../../draft_ideas/select_shortest_production.sql")
-    };
+    let branch = pick_production(token, state, pool).await?;
 
-    let (row,): (String,) = sqlx::query_as(template)
-        .bind(token.reference())
-        .fetch_one(pool)
-        .await
-        .map_err(AppError::for_generation_in_sql)?;
-
-    let branch = ProductionBranch::from_str(&row)?;
-
+    let (semantics, grammar) = compute_semantic_and_grammar_dependencies(token, state)?;
     let mut generation_lookup: HashMap<i32, String> = HashMap::new();
 
     state.begin_generation_sub_step();
+    state.propagate_grammar(grammar);
+    state.propagate_semantics(semantics);
     for placeholder in branch.ordered_placeholder_references()? {
         generation_lookup.insert(
             placeholder.id(),
             generate_from_placeholder(placeholder, state, pool).await?,
         );
     }
-    state.end_generation_sub_step();
+    if let Some((grammar, semantics)) = state
+        .end_generation_sub_step()
+        .as_ref()
+        .map(GenerationSubStep::deconstruct_context)
+    {
+        state.register_grammar(token.id(), grammar.into_iter().copied().collect());
+        state.register_semantics(token.id(), semantics.into_iter().copied().collect());
+    } else {
+        return Err(AppError::for_generation_non_existent_sub_step());
+    }
 
     let result = branch
         .placeholder_appearance_order_in_production()
@@ -381,6 +424,29 @@ async fn generate_from_non_terminal_symbol(
     state.alter_length(result.len() as i32);
 
     Ok(result)
+}
+
+async fn pick_production(
+    token: &TokenReference,
+    state: &mut TrivialGenerationState,
+    pool: &Pool<Postgres>,
+) -> AppResult<ProductionBranch> {
+    let template = if state.is_too_long() {
+        include_str!("../../draft_ideas/select_random_production.sql")
+    } else {
+        include_str!("../../draft_ideas/select_shortest_production.sql")
+    };
+
+    let (row,): (String,) = sqlx::query_as::<Postgres, (String,)>(template)
+        .bind(token.reference())
+        .fetch_optional(pool)
+        .await
+        .map_err(AppError::for_generation_in_sql)?
+        .ok_or_else(|| {
+            AppError::for_generation_no_production_branches_found(token.reference().to_string())
+        })?;
+
+    ProductionBranch::from_str(&row)
 }
 
 #[allow(unused)]
@@ -400,42 +466,39 @@ async fn generate_from_word_selector(
     state: &mut TrivialGenerationState,
     pool: &Pool<Postgres>,
 ) -> AppResult<String> {
+    let selected_word = pick_word(token, state, pool).await?;
+
+    state.register_semantics(token.id(), selected_word.semantic_output.clone());
+    state.register_grammar(token.id(), selected_word.grammar_output.clone());
+
+    if token.grammar_can_propagate() {
+        state.propagate_grammar(selected_word.grammar_output);
+    }
+
+    if token.semantic_can_propagate() {
+        state.propagate_semantics(selected_word.semantic_output);
+    }
+
+    if selected_word.non_repeatable {
+        state.register_word(selected_word.id)
+    }
+
+    Ok(selected_word.content)
+}
+
+async fn pick_word(
+    token: &TokenReference,
+    state: &mut TrivialGenerationState,
+    pool: &Pool<Postgres>,
+) -> AppResult<SelectedWord> {
     let search_tag_names = token.reference().split(',').map(|s| s.trim()).collect_vec();
     let search_tags = retrieve_tag_ids_from_strings(&(search_tag_names), pool).await?;
-    let used_words = state.used_words();
-
-    let (context_semantics, context_grammar) = state.current_context();
-
-    let semantic_tags = match (
-        token.semantic_dependency_on_other(),
-        token.semantic_depends_on_context(),
-    ) {
-        (None, false) => {
-            vec![]
-        }
-        (None, true) => context_semantics,
-        (Some(id), false) => {
-            todo!("Extract semantics from precomputed ID")
-        }
-        (Some(id), true) => {
-            todo!("Extract semantics from precomputed ID and context")
-        }
-    };
-    let grammar_tags = match (
-        token.semantic_dependency_on_other(),
-        token.semantic_depends_on_context(),
-    ) {
-        (None, false) => {
-            vec![]
-        }
-        (None, true) => context_grammar,
-        (Some(id), false) => {
-            todo!("Extract semantics from precomputed ID")
-        }
-        (Some(id), true) => {
-            todo!("Extract semantics from precomputed ID and context")
-        }
-    };
+    let used_words = state
+        .used_words()
+        .into_iter()
+        .chain(vec![&i32::MIN])
+        .collect_vec();
+    let (semantic_tags, grammar_tags) = compute_semantic_and_grammar_dependencies(token, state)?;
 
     let template = include_str!("../../draft_ideas/select_random_word.sql")
         .replace(
@@ -476,31 +539,65 @@ async fn generate_from_word_selector(
 
     for &tag in search_tags
         .iter()
-        .chain(semantic_tags.into_iter())
-        .chain(grammar_tags.into_iter())
+        .chain(semantic_tags.iter())
+        .chain(grammar_tags.iter())
         .chain(used_words.into_iter())
     {
+        tracing::info!("Binding {}", tag);
         query = query.bind(tag);
     }
 
-    let selected_word = query
-        .fetch_one(pool)
+    query
+        .fetch_optional(pool)
         .await
-        .map_err(AppError::for_generation_in_sql)?;
+        .map_err(AppError::for_generation_in_sql)?
+        .ok_or_else(AppError::for_generation_no_words_found)
+}
 
-    if token.grammar_can_propagate() {
-        state.propagate_grammar(selected_word.grammar_output)?;
-    }
+fn compute_semantic_and_grammar_dependencies(
+    token: &TokenReference,
+    state: &TrivialGenerationState,
+) -> AppResult<(Vec<i32>, Vec<i32>)> {
+    let (context_semantics, context_grammar) = state.current_context();
 
-    if token.semantic_can_propagate() {
-        state.propagate_semantics(selected_word.semantic_output)?;
-    }
+    let semantic_tags = match (
+        token.semantic_dependency_on_other(),
+        token.semantic_depends_on_context(),
+    ) {
+        (None, false) => vec![],
+        (None, true) => context_semantics,
+        (Some(ref id), false) => state
+            .extract_placeholder_semantics(id)
+            .ok_or_else(|| GenerationError::NonRegisteredPlaceholder(*id))?,
+        (Some(ref id), true) => state
+            .extract_placeholder_semantics(id)
+            .ok_or_else(|| GenerationError::NonRegisteredPlaceholder(*id))?
+            .into_iter()
+            .chain(context_semantics)
+            .collect(),
+    };
 
-    if selected_word.non_repeatable {
-        state.register_word(selected_word.id)
-    }
+    let grammar_tags = match (
+        token.semantic_dependency_on_other(),
+        token.semantic_depends_on_context(),
+    ) {
+        (None, false) => vec![],
+        (None, true) => context_grammar,
+        (Some(ref id), false) => state
+            .extract_placeholder_grammar(id)
+            .ok_or_else(|| GenerationError::NonRegisteredPlaceholder(*id))?,
+        (Some(ref id), true) => state
+            .extract_placeholder_grammar(id)
+            .ok_or_else(|| GenerationError::NonRegisteredPlaceholder(*id))?
+            .into_iter()
+            .chain(context_grammar)
+            .collect(),
+    };
 
-    Ok(selected_word.content)
+    Ok((
+        semantic_tags.into_iter().copied().collect(),
+        grammar_tags.into_iter().copied().collect(),
+    ))
 }
 
 async fn retrieve_tag_ids_from_strings(
