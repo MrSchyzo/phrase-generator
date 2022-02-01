@@ -14,6 +14,7 @@ use async_graphql::{EmptyMutation, EmptySubscription, Schema};
 use crate::outgoing::tts_wrapper::{SimpleTtsWrapperClient, TtsWrapperConnectionOpts};
 use reqwest::{Client, Url};
 use served::types::graphql::QueryRoot;
+use sqlx::postgres::PgPoolOptions;
 
 use tracing::info;
 
@@ -26,20 +27,28 @@ async fn main() -> std::io::Result<()> {
 
     info!("Connecting to TTS wrapper at: {}", tts_wrapper_root);
 
+    info!("Connecting to DB at: postgres://postgres:password@localhost:49156/postgres");
+
+    let pool = PgPoolOptions::new()
+        .max_connections(8)
+        .connect("postgres://postgres:password@localhost:49156/postgres")
+        .await
+        .expect("Postgres connection failed!");
+
     let uploader = Uploader::new(Arc::new(SimpleTtsWrapperClient::new(
         Client::new(),
         TtsWrapperConnectionOpts {
             root_url: Url::parse(&tts_wrapper_root).unwrap(),
         },
     )));
-    let generator = PhraseGenerator {};
+    let generator = PhraseGenerator::new(Arc::new(pool));
     let core = Arc::new(AppCore::new(Arc::new(uploader), Arc::new(generator)));
 
     let schema = Schema::build(QueryRoot, EmptyMutation, EmptySubscription)
         .data(core.clone()) //For GQL field async resolvers through Context
         .finish();
 
-    println!("Playground: http://localhost:8000");
+    println!("Done! Playground at http://localhost:8000");
 
     HttpServer::new(move || {
         App::new()

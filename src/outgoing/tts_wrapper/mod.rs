@@ -45,7 +45,7 @@ impl TtsWrapperClient for SimpleTtsWrapperClient {
             .send()
             .await
             .log_err("Uploader is not healthy", LogLevel::Warning)
-            .map_err(AppError::for_infrastructure)
+            .map_err(AppError::for_infrastructure_http_client_failed)
             .map(|_| ())
     }
 
