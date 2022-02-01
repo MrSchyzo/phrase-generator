@@ -341,8 +341,8 @@ impl GenerationState<i32, i32, i32, i32> for InMemoryGenerationState {
     }
 }
 
-#[allow(unused)]
 async fn generate_phrase(_: SpeechGenerationOptions) -> AppResult<Speech> {
+    //TODO: sorry, too many clients already.
     let pool = PgPoolOptions::new()
         .max_connections(8)
         .connect("postgres://postgres:password@localhost:49153/postgres")
@@ -362,7 +362,6 @@ async fn generate_phrase(_: SpeechGenerationOptions) -> AppResult<Speech> {
     })
 }
 
-#[allow(unused)]
 #[async_recursion]
 async fn generate_from_placeholder(
     placeholder: &PlaceholderReference,
@@ -379,7 +378,6 @@ async fn generate_from_placeholder(
     }
 }
 
-#[allow(unused)]
 #[async_recursion]
 async fn generate_from_non_terminal_symbol(
     token: &TokenReference,
@@ -449,7 +447,6 @@ async fn pick_production(
     ProductionBranch::from_str(&row)
 }
 
-#[allow(unused)]
 #[derive(FromRow)]
 struct SelectedWord {
     id: i32,
@@ -459,7 +456,6 @@ struct SelectedWord {
     grammar_output: Vec<i32>,
 }
 
-#[allow(unused)]
 #[async_recursion]
 async fn generate_from_word_selector(
     token: &TokenReference,
@@ -578,8 +574,8 @@ fn compute_semantic_and_grammar_dependencies(
     };
 
     let grammar_tags = match (
-        token.semantic_dependency_on_other(),
-        token.semantic_depends_on_context(),
+        token.grammar_dependency_on_other(),
+        token.grammar_depends_on_context(),
     ) {
         (None, false) => vec![],
         (None, true) => context_grammar,

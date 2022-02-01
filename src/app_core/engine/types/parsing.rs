@@ -21,7 +21,6 @@ pub struct TokenReference {
     reference: String,
 }
 
-#[allow(dead_code)] //TODO: remove it
 impl TokenReference {
     pub fn new_trivial_reference(reference: String) -> Self {
         Self {
