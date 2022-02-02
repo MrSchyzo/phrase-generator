@@ -132,7 +132,12 @@ impl PhraseGenerator {
 impl AsyncPhraseGenerator for PhraseGenerator {
     async fn generate(&self, opts: SpeechGenerationOptions) -> AppResult<Speech> {
         if rand::thread_rng().next_u32() % 100 > 2 {
-            generate_phrase(opts, self.pool.as_ref()).await
+            generate_phrase(opts, self.pool.as_ref())
+                .await
+                .map(|s| Speech {
+                    id: "1".to_owned(),
+                    text: s,
+                })
         } else {
             Ok(Speech {
                 id: "3".to_owned(),
@@ -374,7 +379,7 @@ impl GenerationState<i32, i32, i32, i32> for InMemoryGenerationState {
     }
 }
 
-async fn generate_phrase(_: SpeechGenerationOptions, pool: &Pool<Postgres>) -> AppResult<Speech> {
+async fn generate_phrase(_: SpeechGenerationOptions, pool: &Pool<Postgres>) -> AppResult<String> {
     let mut state = InMemoryGenerationState::new(100, 500);
 
     generate_from_non_terminal_symbol(
@@ -383,10 +388,6 @@ async fn generate_phrase(_: SpeechGenerationOptions, pool: &Pool<Postgres>) -> A
         pool,
     )
     .await
-    .map(|s| Speech {
-        id: "1".to_string(),
-        text: s,
-    })
 }
 
 #[async_recursion]
@@ -566,7 +567,7 @@ async fn pick_word(
         .chain(grammar_tags.iter())
         .chain(used_words.into_iter())
     {
-        tracing::info!("Binding {}", tag);
+        tracing::debug!("Binding parameter to value {}", tag);
         query = query.bind(tag);
     }
 
