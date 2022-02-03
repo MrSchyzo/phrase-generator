@@ -10,7 +10,7 @@ use async_recursion::async_recursion;
 use async_trait::async_trait;
 use itertools::Itertools;
 use rand::RngCore;
-use sqlx::FromRow;
+use sqlx::{FromRow, Transaction};
 use sqlx::{Pool, Postgres};
 
 use self::errors::AppError;
@@ -130,20 +130,67 @@ impl PhraseGenerator {
 
 #[async_trait]
 impl AsyncPhraseGenerator for PhraseGenerator {
+    // WHAT IS THIS SMOKING PILE OF SPAGHETT'
     async fn generate(&self, opts: SpeechGenerationOptions) -> AppResult<Speech> {
-        if rand::thread_rng().next_u32() % 100 > 2 {
-            generate_phrase(opts, self.pool.as_ref())
+        let max_phrases = 15u64; //TODO: hardcoded
+
+        let mut transaction = self
+            .pool
+            .begin()
+            .await
+            .map_err(AppError::for_generation_in_sql)?;
+
+        let current_total = sqlx::query_scalar::<_, i64>("SELECT COUNT(id) FROM generated_phrase")
+            .fetch_one(&mut transaction)
+            .await
+            .map_err(AppError::for_generation_in_sql)?;
+
+        let remaining = (max_phrases as i64 - current_total).max(0);
+
+        let result = if rand::thread_rng().next_u64() % max_phrases < (remaining as u64) {
+            tracing::info!("Generating new phrase, remaining {remaining}");
+            let s = generate_phrase(opts, &mut transaction).await?;
+            if let Some(id) = sqlx::query_scalar::<_, sqlx::types::Uuid>(
+                "SELECT id FROM generated_phrase WHERE content = $1",
+            )
+            .bind(&s)
+            .fetch_optional(&mut transaction)
+            .await
+            .map_err(AppError::for_generation_in_sql)?
+            {
+                Ok((id, s))
+            } else {
+                sqlx::query!(
+                    "INSERT INTO generated_phrase (content) VALUES ($1) RETURNING id",
+                    &s
+                )
+                .fetch_one(&mut transaction)
                 .await
-                .map(|s| Speech {
-                    id: "1".to_owned(),
-                    text: s,
-                })
+                .map(|res| res.id)
+                .map_err(AppError::for_generation_in_sql)
+                .map(|uuid| (uuid, s))
+            }
         } else {
-            Ok(Speech {
-                id: "3".to_owned(),
-                text: "Ciaone mondone".to_owned(),
-            })
+            tracing::info!("Extracting existing phrase, remaining {remaining}");
+
+            sqlx::query_as::<_, (sqlx::types::Uuid, String)>(
+                "SELECT id, content FROM generated_phrase ORDER BY random() limit 1",
+            )
+            .fetch_one(&mut transaction)
+            .await
+            .map_err(AppError::for_generation_in_sql)
         }
+        .map(|(uuid, text)| Speech {
+            id: uuid.to_string(),
+            text,
+        })?;
+
+        transaction
+            .commit()
+            .await
+            .map_err(AppError::for_generation_in_sql)?;
+
+        Ok(result)
     }
 }
 
@@ -379,13 +426,16 @@ impl GenerationState<i32, i32, i32, i32> for InMemoryGenerationState {
     }
 }
 
-async fn generate_phrase(_: SpeechGenerationOptions, pool: &Pool<Postgres>) -> AppResult<String> {
+async fn generate_phrase(
+    _: SpeechGenerationOptions,
+    transaction: &mut Transaction<'_, Postgres>,
+) -> AppResult<String> {
     let mut state = InMemoryGenerationState::new(100, 500);
 
     generate_from_non_terminal_symbol(
         &TokenReference::new_trivial_reference("Start".to_owned()),
         &mut state,
-        pool,
+        transaction,
     )
     .await
 }
@@ -394,14 +444,14 @@ async fn generate_phrase(_: SpeechGenerationOptions, pool: &Pool<Postgres>) -> A
 async fn generate_from_placeholder(
     placeholder: &PlaceholderReference,
     state: &mut TrivialGenerationState,
-    pool: &Pool<Postgres>,
+    transaction: &mut Transaction<'_, Postgres>,
 ) -> AppResult<String> {
     match placeholder {
         PlaceholderReference::NonTerminalSymbol(nts) => {
-            generate_from_non_terminal_symbol(nts, state, pool).await
+            generate_from_non_terminal_symbol(nts, state, transaction).await
         }
         PlaceholderReference::WordSelector(word) => {
-            generate_from_word_selector(word, state, pool).await
+            generate_from_word_selector(word, state, transaction).await
         }
     }
 }
@@ -410,13 +460,13 @@ async fn generate_from_placeholder(
 async fn generate_from_non_terminal_symbol(
     token: &TokenReference,
     state: &mut TrivialGenerationState,
-    pool: &Pool<Postgres>,
+    transaction: &mut Transaction<'_, Postgres>,
 ) -> AppResult<String> {
     if state.is_too_deep() {
         return Err(GenerationError::ExcessiveDepth(state.current_depth()).into());
     }
 
-    let branch = pick_production(token, state, pool).await?;
+    let branch = pick_production(token, state, transaction).await?;
 
     let (semantics, grammar) = compute_semantic_and_grammar_dependencies(token, state)?;
     let mut generation_lookup: HashMap<i32, String> = HashMap::new();
@@ -427,7 +477,7 @@ async fn generate_from_non_terminal_symbol(
     for placeholder in branch.ordered_placeholder_references()? {
         generation_lookup.insert(
             placeholder.id(),
-            generate_from_placeholder(placeholder, state, pool).await?,
+            generate_from_placeholder(placeholder, state, transaction).await?,
         );
     }
     if let Some((grammar, semantics)) = state
@@ -455,7 +505,7 @@ async fn generate_from_non_terminal_symbol(
 async fn pick_production(
     token: &TokenReference,
     state: &mut TrivialGenerationState,
-    pool: &Pool<Postgres>,
+    transaction: &mut Transaction<'_, Postgres>,
 ) -> AppResult<ProductionBranch> {
     let template = if state.is_too_long() {
         include_str!("../../draft_ideas/select_random_production.sql")
@@ -465,7 +515,7 @@ async fn pick_production(
 
     let (row,): (String,) = sqlx::query_as::<Postgres, (String,)>(template)
         .bind(token.reference())
-        .fetch_optional(pool)
+        .fetch_optional(transaction)
         .await
         .map_err(AppError::for_generation_in_sql)?
         .ok_or_else(|| {
@@ -488,9 +538,9 @@ struct SelectedWord {
 async fn generate_from_word_selector(
     token: &TokenReference,
     state: &mut TrivialGenerationState,
-    pool: &Pool<Postgres>,
+    transaction: &mut Transaction<'_, Postgres>,
 ) -> AppResult<String> {
-    let selected_word = pick_word(token, state, pool).await?;
+    let selected_word = pick_word(token, state, transaction).await?;
 
     state.register_semantics(token.id(), selected_word.semantic_output.clone());
     state.register_grammar(token.id(), selected_word.grammar_output.clone());
@@ -513,10 +563,10 @@ async fn generate_from_word_selector(
 async fn pick_word(
     token: &TokenReference,
     state: &mut TrivialGenerationState,
-    pool: &Pool<Postgres>,
+    transaction: &mut Transaction<'_, Postgres>,
 ) -> AppResult<SelectedWord> {
     let search_tag_names = token.reference().split(',').map(|s| s.trim()).collect_vec();
-    let search_tags = retrieve_tag_ids_from_strings(&(search_tag_names), pool).await?;
+    let search_tags = retrieve_tag_ids_from_strings(&(search_tag_names), transaction).await?;
     let used_words = state
         .used_words()
         .into_iter()
@@ -572,7 +622,7 @@ async fn pick_word(
     }
 
     query
-        .fetch_optional(pool)
+        .fetch_optional(transaction)
         .await
         .map_err(AppError::for_generation_in_sql)?
         .ok_or_else(AppError::for_generation_no_words_found)
@@ -626,7 +676,7 @@ fn compute_semantic_and_grammar_dependencies(
 
 async fn retrieve_tag_ids_from_strings(
     tags: &[&str],
-    pool: &Pool<Postgres>,
+    transaction: &mut Transaction<'_, Postgres>,
 ) -> AppResult<Vec<i32>> {
     let template = include_str!("../../draft_ideas/select_ids_of_tags.sql").replace(
         "<SEMANTIC_TAGS_PLACEHOLDERS>",
@@ -643,7 +693,7 @@ async fn retrieve_tag_ids_from_strings(
     }
 
     let ids = query
-        .fetch_all(pool)
+        .fetch_all(transaction)
         .await
         .map_err(AppError::for_generation_in_sql)?;
 

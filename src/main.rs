@@ -25,13 +25,16 @@ async fn main() -> std::io::Result<()> {
     let tts_wrapper_root =
         std::env::var("TTS_WRAPPER_URL").unwrap_or_else(|_| "http://localhost:8080".to_owned());
 
+    let db_connection_string = std::env::var("DB_CONNECTION_STRING")
+        .unwrap_or_else(|_| "postgres://postgres:password@localhost:49153/postgres".to_owned());
+
     info!("Connecting to TTS wrapper at: {}", tts_wrapper_root);
 
-    info!("Connecting to DB at: postgres://postgres:password@localhost:49156/postgres");
+    info!("Connecting to DB at: EH? VOLEVIH!");
 
     let pool = PgPoolOptions::new()
         .max_connections(8)
-        .connect("postgres://postgres:password@localhost:49156/postgres")
+        .connect(db_connection_string.as_str())
         .await
         .expect("Postgres connection failed!");
 
