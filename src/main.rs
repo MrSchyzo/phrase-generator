@@ -44,8 +44,15 @@ async fn main() -> std::io::Result<()> {
             root_url: Url::parse(&tts_wrapper_root).unwrap(),
         },
     )));
-    let generator = PhraseGenerator::new(Arc::new(pool));
-    let core = Arc::new(AppCore::new(Arc::new(uploader), Arc::new(generator)));
+
+    //TODO: this is a smell. Arc<Pool> can be put only once if I happen to define a "DAO"
+    let arc_pool = Arc::new(pool);
+    let generator = PhraseGenerator::new(arc_pool.clone());
+    let core = Arc::new(AppCore::new(
+        Arc::new(uploader),
+        Arc::new(generator),
+        arc_pool,
+    ));
 
     let schema = Schema::build(QueryRoot, EmptyMutation, EmptySubscription)
         .data(core.clone()) //For GQL field async resolvers through Context

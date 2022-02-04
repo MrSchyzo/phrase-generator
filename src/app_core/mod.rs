@@ -57,13 +57,19 @@ type AppPhraseGenerator = dyn AsyncHealthyPhraseGenerator + Send + Sync;
 pub struct AppCore {
     uploader: Arc<AppUploader>,
     generator: Arc<AppPhraseGenerator>,
+    pool: Arc<Pool<Postgres>>,
 }
 
 impl AppCore {
-    pub fn new(uploader: Arc<AppUploader>, generator: Arc<AppPhraseGenerator>) -> Self {
+    pub fn new(
+        uploader: Arc<AppUploader>,
+        generator: Arc<AppPhraseGenerator>,
+        pool: Arc<Pool<Postgres>>,
+    ) -> Self {
         Self {
             uploader,
             generator,
+            pool,
         }
     }
 
@@ -73,6 +79,10 @@ impl AppCore {
 
     pub fn generator(&self) -> &AppPhraseGenerator {
         self.generator.as_ref()
+    }
+
+    pub fn pool(&self) -> &Pool<Postgres> {
+        self.pool.as_ref()
     }
 
     pub async fn is_healthy(&self) -> AppResult<()> {
@@ -132,7 +142,7 @@ impl PhraseGenerator {
 impl AsyncPhraseGenerator for PhraseGenerator {
     // WHAT IS THIS SMOKING PILE OF SPAGHETT'
     async fn generate(&self, opts: SpeechGenerationOptions) -> AppResult<Speech> {
-        let max_phrases = 15u64; //TODO: hardcoded
+        let max_phrases = 256u64; //TODO: hardcoded
 
         let mut transaction = self
             .pool
@@ -507,7 +517,7 @@ async fn pick_production(
     state: &mut TrivialGenerationState,
     transaction: &mut Transaction<'_, Postgres>,
 ) -> AppResult<ProductionBranch> {
-    let template = if state.is_too_long() {
+    let template = if !state.is_too_long() {
         include_str!("../../draft_ideas/select_random_production.sql")
     } else {
         include_str!("../../draft_ideas/select_shortest_production.sql")
