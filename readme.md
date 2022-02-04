@@ -4,7 +4,11 @@ It requires:
 - `lld` linker (`sudo apt install -y lld`)
 - `cargo`
 
-This is a WIP
+This is a WIP, todo list:
+- [ ] `docker-compose` it with `tts-rest-wrapper`
+- [ ] make it configurable
+- [ ] make code more readable and more unit testable
+- [ ] IP rate limiting (maybe possible through an nginx docker image as reverse proxy)
 
 ## Adding git hooks for this project
 
