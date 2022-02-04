@@ -21,6 +21,12 @@ impl AppError {
     pub fn for_upload(error: reqwest::Error) -> Self {
         UploadError::from(error).into()
     }
+    pub fn for_upload_in_sql(error: sqlx::Error) -> Self {
+        UploadError::from(error).into()
+    }
+    pub fn for_upload_in_sql_uuid(error: sqlx::types::uuid::Error) -> Self {
+        UploadError::from(error).into()
+    }
     pub fn for_generation_in_sql(error: sqlx::Error) -> Self {
         GenerationError::from(error).into()
     }
@@ -69,6 +75,10 @@ impl AppError {
 pub enum UploadError {
     #[error("Server had problems connecting to its dependencies.")]
     HttpFailed(#[from] HttpError),
+    #[error("DB Error, {0}")]
+    DBFailed(String),
+    #[error("DB UUID parsing failed, {0}")]
+    UuidNotParsed(String),
 }
 
 #[derive(Error, Debug, Clone)]
@@ -96,6 +106,18 @@ impl From<sqlx::Error> for GenerationError {
 impl From<sqlx::Error> for InfrastructureError {
     fn from(e: Error) -> Self {
         Self::DBConnectionsUnavailable(format!("{e}"))
+    }
+}
+
+impl From<sqlx::Error> for UploadError {
+    fn from(e: Error) -> Self {
+        Self::DBFailed(format!("{e}"))
+    }
+}
+
+impl From<sqlx::types::uuid::Error> for UploadError {
+    fn from(e: sqlx::types::uuid::Error) -> Self {
+        Self::DBFailed(format!("{e}"))
     }
 }
 
