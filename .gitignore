@@ -1,2 +1,4 @@
 /target
 .idea
+compose-workspace/tts-wrapper/cache/**
+!compose-workspace/tts-wrapper/cache/.gitkeep

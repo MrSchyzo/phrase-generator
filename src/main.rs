@@ -29,14 +29,15 @@ async fn main() -> std::io::Result<()> {
         .unwrap_or_else(|_| "postgres://postgres:password@localhost:49153/postgres".to_owned());
 
     info!("Connecting to TTS wrapper at: {}", tts_wrapper_root);
-
-    info!("Connecting to DB at: EH? VOLEVIH!");
+    info!("Connecting to DB at: {}...", &db_connection_string[0..15]);
 
     let pool = PgPoolOptions::new()
         .max_connections(8)
         .connect(db_connection_string.as_str())
         .await
         .expect("Postgres connection failed!");
+
+    sqlx::migrate!().run(&pool).await.expect("Migration failed");
 
     let uploader = Uploader::new(Arc::new(SimpleTtsWrapperClient::new(
         Client::new(),

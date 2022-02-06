@@ -3,6 +3,10 @@ if [ -n "$(git status -s)" ]; then
     echo "❌"
     return 1
 fi
-echo "✔️"
+echo "✔"
 
-cargo fmt --check && cargo clippy -- -D warnings && cargo test
+./migrateme.sh && \
+cargo fmt --check && \
+cargo clippy -- -D warnings && \
+cargo test && \
+docker stop dev-pgql

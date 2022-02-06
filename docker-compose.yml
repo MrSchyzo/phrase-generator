@@ -1,0 +1,63 @@
+version: "3.0"
+
+services:
+  app:
+    user: "1000:1000"
+    expose:
+      - 81
+    ports:
+      - published: 81
+        target: 8000
+    networks:
+      - phrasegen-internal
+    env_file:
+      - ./compose-workspace/phrasegen/.dev.env
+    build:
+      context: .
+      dockerfile: Dockerfile
+      args:
+        DB_URL: "postgres://postgres:postgres@localhost:12345/postgres"
+      network: host
+    depends_on:
+      - db
+      - tts-wrapper
+  db:
+    expose:
+      - 54321
+    ports:
+      - published: 54321
+        target: 5432
+    image: postgres:14.1
+    environment:
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_USER: postgres
+      POSTGRES_DATABASE: postgres
+    volumes:
+      - db-data:/var/lib/postgresql/data
+    networks:
+      - phrasegen-internal
+  tts-wrapper:
+    image: "quarkus/tts-rest-wrapper"
+    user: "1000:1000"
+    expose:
+      - 80
+    ports:
+      - published: 80
+        target: 8080
+    networks:
+      - phrasegen-internal
+    volumes:
+      - source: ./compose-workspace/tts-wrapper/cache
+        target: /work/cache
+        read_only: false
+        type: bind
+      - source: ./compose-workspace/tts-wrapper/config
+        target: /work/config
+        read_only: true
+        type: bind
+
+networks:
+  phrasegen-internal:
+
+volumes:
+  db-data:
