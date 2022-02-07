@@ -5,6 +5,7 @@ It requires:
 - `cargo`
 - `docker (19.03+)`
 - `docker-compose`
+- `jdk 11+`
 
 This is a WIP, todo list:
 - [ ] make it configurable
