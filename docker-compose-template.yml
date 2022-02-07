@@ -1,8 +1,12 @@
 version: "3.4"
 
+# Create a docker-compose.yml that is a copy of this file
+# in which ##‌‌USER‌‌## is replaced with the output of `id -u`
+# and ##‌‌GROUP‌‌## is replaced with the output of `id -g`
+
 services:
   app:
-    user: "1000:1000"
+    user: "##USER##:##GROUP##"
     expose:
       - 81
     ports:
@@ -38,7 +42,7 @@ services:
       - phrasegen-internal
   tts-wrapper:
     image: "quarkus/tts-rest-wrapper"
-    user: "1000:1000"
+    user: "##USER##:##GROUP##"
     expose:
       - 80
     ports:

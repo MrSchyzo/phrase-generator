@@ -2,3 +2,6 @@
 .idea
 compose-workspace/tts-wrapper/cache/**
 !compose-workspace/tts-wrapper/cache/.gitkeep
+
+# this file is generated when ./runme.sh is run
+docker-compose.yml

@@ -4,3 +4,10 @@ suggested_hooks
 .git
 readme.md
 .gitignore
+compose-workspace
+draft_ideas/grammar.md
+*.sh
+rust-toolchain.toml
+Dockerfile
+docker-compose.yml
+docker-compose-template.yml
