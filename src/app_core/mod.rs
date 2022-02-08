@@ -159,6 +159,7 @@ impl AsyncPhraseGenerator for PhraseGenerator {
 
         let result = if rand::thread_rng().next_u64() % max_phrases < (remaining as u64) {
             tracing::info!("Generating new phrase, remaining {remaining}");
+            //TODO: add some retry, generation can fail
             let s = generate_phrase(opts, &mut transaction).await?;
             if let Some(id) = sqlx::query_scalar::<_, sqlx::types::Uuid>(
                 "SELECT id FROM generated_phrase WHERE content = $1",

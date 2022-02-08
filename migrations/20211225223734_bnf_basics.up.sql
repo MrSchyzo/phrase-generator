@@ -15,7 +15,7 @@ CREATE INDEX idx_production_nts_amount ON production (nts_amount);
 
 CREATE TABLE word (
   id serial primary key not null,
-  content varchar(64) not null,
+  content varchar(64) unique not null,
   non_repeatable boolean not null default true
 );
 CREATE INDEX idx_word_content ON word (content varchar_pattern_ops);
@@ -65,126 +65,126 @@ $$
 $$ 
 language sql;
 
-INSERT INTO grammar_tag (id, name) VALUES
-(1, 'Il'),
-(2, 'Lo'),
-(3, 'La'),
-(4, 'I'),
-(5, 'Gli'),
-(6, 'Le'),
-(7, '_'),
-(8, 'Un'),
-(9, 'Un'''),
-(10, 'Uno'),
-(11, 'Una')
+INSERT INTO grammar_tag (name) VALUES
+('Il'),
+('Lo'),
+('La'),
+('I'),
+('Gli'),
+('Le'),
+('_'),
+('Un'),
+('Un'''),
+('Uno'),
+('Una')
 ;
 
-INSERT INTO non_terminal_symbol (id, name) VALUES
-(1, 'Start')
+INSERT INTO non_terminal_symbol (name) VALUES
+('Start')
 ;
 
-INSERT INTO production (id, non_terminal_symbol, production) VALUES
-(3, 1, '<0:N:F:N:F:Santo> <1:O(0):T:O(0):T:Malaparola>')
+INSERT INTO production (non_terminal_symbol, production) VALUES
+(1, '<0:N:F:N:F:Santo> <1:O(0):T:O(0):T:Malaparola>')
 ;
 
-INSERT INTO semantic_tag (id, name, sticky) VALUES
-(1, 'Malaparola', 't'),
-(2, 'Santo', 'f'),
-(3, 'Divino', 'f'),
-(4, 'Animale', 't'),
-(5, 'Malattia', 't')
+INSERT INTO semantic_tag (name, sticky) VALUES
+('Malaparola', 't'),
+('Santo', 'f'),
+('Divino', 'f'),
+('Animale', 't'),
+('Malattia', 't')
 ;
 
-INSERT INTO word (id, content, non_repeatable) VALUES
-(1, 'Dio', 't'),
-(2, 'Madonna', 't'),
-(3, 'Cristo', 't'),
-(4, 'San Giuseppe', 't'),
-(5, 'Gesù', 't'),
-(6, 'Maria', 't'),
-(7, 'Papa', 't'),
-(8, 'Cane', 't'),
-(9, 'Porco', 't'),
-(10, 'Cagna', 't'),
-(11, 'Tubercoloso', 't'),
-(12, 'Tubercolosa', 't'),
-(13, 'Porca', 't'),
-(14, 'Suino', 't'),
-(15, 'Suina', 't'),
-(16, 'Assassino', 't'),
-(17, 'Assassina', 't'),
-(18, 'Megattera', 't')
+INSERT INTO word (content, non_repeatable) VALUES
+('Dio', 't'),
+('Madonna', 't'),
+('Cristo', 't'),
+('San Giuseppe', 't'),
+('Gesù', 't'),
+('Maria', 't'),
+('Papa', 't'),
+('Cane', 't'),
+('Porco', 't'),
+('Cagna', 't'),
+('Tubercoloso', 't'),
+('Tubercolosa', 't'),
+('Porca', 't'),
+('Suino', 't'),
+('Suina', 't'),
+('Assassino', 't'),
+('Assassina', 't'),
+('Megattera', 't')
 ;
 
-INSERT INTO word_grammar (id, word, grammar_tag) VALUES
-(1, 1, 1),
-(2, 1, 8),
-(3, 2, 3),
-(4, 2, 11),
-(5, 3, 1),
-(6, 3, 8),
-(7, 4, 1),
-(8, 4, 8),
-(9, 5, 1),
-(10, 5, 8),
-(11, 6, 3),
-(12, 6, 11),
-(13, 7, 1),
-(14, 7, 8),
-(15, 8, 1),
-(16, 8, 8),
-(17, 9, 1),
-(18, 9, 8),
-(19, 10, 3),
-(20, 10, 11),
-(21, 11, 1),
-(22, 11, 8),
-(23, 12, 3),
-(24, 12, 11),
-(25, 13, 3),
-(26, 13, 11),
-(27, 14, 1),
-(28, 14, 8),
-(29, 15, 3),
-(30, 15, 11),
-(31, 16, 1),
-(32, 16, 8),
-(33, 17, 3),
-(34, 17, 11),
-(35, 18, 3),
-(36, 18, 11)
+INSERT INTO word_grammar (word, grammar_tag) VALUES
+(1, 1),
+(1, 8),
+(2, 3),
+(2, 11),
+(3, 1),
+(3, 8),
+(4, 1),
+(4, 8),
+(5, 1),
+(5, 8),
+(6, 3),
+(6, 11),
+(7, 1),
+(7, 8),
+(8, 1),
+(8, 8),
+(9, 1),
+(9, 8),
+(10, 3),
+(10, 11),
+(11, 1),
+(11, 8),
+(12, 3),
+(12, 11),
+(13, 3),
+(13, 11),
+(14, 1),
+(14, 8),
+(15, 3),
+(15, 11),
+(16, 1),
+(16, 8),
+(17, 3),
+(17, 11),
+(18, 3),
+(18, 11)
 ;
 
-INSERT INTO word_semantic (id, word, semantic_tag) VALUES
-(1, 1, 2),
-(2, 1, 3),
-(3, 2, 2),
-(4, 2, 3),
-(5, 3, 2),
-(6, 3, 3),
-(7, 5, 2),
-(8, 5, 3),
-(9, 4, 2),
-(10, 6, 2),
-(11, 7, 2),
-(12, 8, 1),
-(13, 8, 4),
-(14, 9, 1),
-(15, 9, 4),
-(16, 10, 1),
-(17, 10, 4),
-(18, 13, 1),
-(19, 13, 4),
-(20, 14, 1),
-(21, 14, 4),
-(22, 15, 1),
-(23, 15, 4),
-(24, 16, 1),
-(25, 17, 1),
-(26, 11, 1),
-(27, 11, 5),
-(28, 12, 1),
-(29, 12, 5),
-(37, 18, 1),
-(38, 18, 4)
+INSERT INTO word_semantic (word, semantic_tag) VALUES
+(1, 2),
+(1, 3),
+(2, 2),
+(2, 3),
+(3, 2),
+(3, 3),
+(5, 2),
+(5, 3),
+(4, 2),
+(6, 2),
+(7, 2),
+(8, 1),
+(8, 4),
+(9, 1),
+(9, 4),
+(10, 1),
+(10, 4),
+(13, 1),
+(13, 4),
+(14, 1),
+(14, 4),
+(15, 1),
+(15, 4),
+(16, 1),
+(17, 1),
+(11, 1),
+(11, 5),
+(12, 1),
+(12, 5),
+(18, 1),
+(18, 4)
 ;
