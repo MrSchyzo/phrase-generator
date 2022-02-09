@@ -8,7 +8,7 @@ select w.id as id, w."content" as content, w.non_repeatable as non_repeatable,
 	), array[]::integer[]) as semantic_output,
 	coalesce((
 		select array_agg(gram.grammar_tag) 
-		from word_grammar gram
+		from word_grammar_requirements gram
 		where gram.word = w.id
 	), array[]::integer[]) as grammar_output
 from word w
@@ -21,11 +21,11 @@ where array_contains_and_intersects(
 	array[<SELECTED_SEMANTIC_TAGS_PLACEHOLDERS>]::integer[],
 	array[<CONTEXTUAL_SEMANTIC_TAGS_PLACEHOLDERS>]::integer[]
 )
-and array_contains_or_intersects((
+and coalesce((
   select array_agg(wg.grammar_tag)
-  from word_grammar wg
+  from word_grammar_compatibility wg
   where wg.word = w.id
-), array[<CONTEXTUAL_GRAMMAR_TAGS_PLACEHOLDERS>]::integer[])
+), array[]::integer[]) @> array[<CONTEXTUAL_GRAMMAR_TAGS_PLACEHOLDERS>]::integer[]
 and (
   id not in (<USED_WORDS>)
 )

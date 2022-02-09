@@ -42,26 +42,47 @@ CREATE INDEX idx_word_semantic_word ON word_semantic (word);
 CREATE INDEX idx_word_semantic_semantic_tag ON word_semantic (semantic_tag);
 CREATE UNIQUE INDEX idx_word_semantic_uniqueness ON word_semantic (word, semantic_tag);
 
-CREATE TABLE word_grammar (
+CREATE TABLE word_grammar_compatibility (
   id serial primary key not null,
   word int not null,
   grammar_tag int not null,
   foreign key (word) references word (id),
   foreign key (grammar_tag) references grammar_tag (id)
 );
-CREATE INDEX idx_word_grammar_word ON word_grammar (word);
-CREATE INDEX idx_word_grammar_grammar_tag ON word_grammar (grammar_tag);
-CREATE UNIQUE INDEX idx_word_grammar_uniqueness ON word_grammar (word, grammar_tag);
+CREATE INDEX idx_word_grammar_compatibility_word ON word_grammar_compatibility (word);
+CREATE INDEX idx_word_grammar_compatibility_grammar_tag ON word_grammar_compatibility (grammar_tag);
+CREATE UNIQUE INDEX idx_word_grammar_compatibility_uniqueness ON word_grammar_compatibility (word, grammar_tag);
+
+CREATE TABLE word_grammar_requirements (
+  id serial primary key not null,
+  word int not null,
+  grammar_tag int not null,
+  foreign key (word) references word (id),
+  foreign key (grammar_tag) references grammar_tag (id)
+);
+CREATE INDEX idx_word_grammar_requirements_word ON word_grammar_requirements (word);
+CREATE INDEX idx_word_grammar_requirements_grammar_tag ON word_grammar_requirements (grammar_tag);
+CREATE UNIQUE INDEX idx_word_grammar_requirements_uniqueness ON word_grammar_requirements (word, grammar_tag);
 
 create or replace function array_contains_or_intersects(whole int[], contained_or_intersected int[]) returns boolean as
 $$
-	select (whole @> contained_or_intersected or whole && contained_or_intersected);
+	select
+	  coalesce(whole, array[]::integer[])
+	  @> coalesce(contained_or_intersected, array[]::integer[])
+  or
+    coalesce(whole, array[]::integer[])
+    && coalesce(contained_or_intersected, array[]::integer[])
+  ;
 $$
 language sql;
 
 create or replace function array_contains_and_intersects(whole int[], contained int[], intersects_with int[]) returns boolean as
 $$
-	select (whole @> contained and array_contains_or_intersects(whole, intersects_with));
+	select
+	  coalesce(whole, array[]::integer[])
+    @> coalesce(contained, array[]::integer[])
+  and
+    array_contains_or_intersects(whole, intersects_with);
 $$ 
 language sql;
 
@@ -116,7 +137,46 @@ INSERT INTO word (content, non_repeatable) VALUES
 ('Megattera', 't')
 ;
 
-INSERT INTO word_grammar (word, grammar_tag) VALUES
+INSERT INTO word_grammar_compatibility (word, grammar_tag) VALUES
+(1, 1),
+(1, 8),
+(2, 3),
+(2, 11),
+(3, 1),
+(3, 8),
+(4, 1),
+(4, 8),
+(5, 1),
+(5, 8),
+(6, 3),
+(6, 11),
+(7, 1),
+(7, 8),
+(8, 1),
+(8, 8),
+(9, 1),
+(9, 8),
+(10, 3),
+(10, 11),
+(11, 1),
+(11, 8),
+(12, 3),
+(12, 11),
+(13, 3),
+(13, 11),
+(14, 1),
+(14, 8),
+(15, 3),
+(15, 11),
+(16, 1),
+(16, 8),
+(17, 3),
+(17, 11),
+(18, 3),
+(18, 11)
+;
+
+INSERT INTO word_grammar_requirements (word, grammar_tag) VALUES
 (1, 1),
 (1, 8),
 (2, 3),
