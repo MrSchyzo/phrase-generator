@@ -482,6 +482,9 @@ async fn generate_from_non_terminal_symbol(
     let (semantics, grammar) = compute_semantic_and_grammar_dependencies(token, state)?;
     let mut generation_lookup: HashMap<i32, String> = HashMap::new();
 
+    tracing::info!("Dependency on grammar: {:?}", grammar);
+    tracing::info!("Dependency on semantics: {:?}", semantics);
+
     state.begin_generation_sub_step();
     state.propagate_grammar(grammar);
     state.propagate_semantics(semantics);
@@ -491,11 +494,17 @@ async fn generate_from_non_terminal_symbol(
             generate_from_placeholder(placeholder, state, transaction).await?,
         );
     }
-    if let Some((grammar, semantics)) = state
+    if let Some((semantics, grammar)) = state
         .end_generation_sub_step()
         .as_ref()
         .map(GenerationSubStep::deconstruct_context)
     {
+        tracing::info!(
+            "Token {} has released grammar {:?} and semantics {:?}",
+            token.id(),
+            grammar,
+            semantics,
+        );
         state.register_grammar(token.id(), grammar.into_iter().copied().collect());
         state.register_semantics(token.id(), semantics.into_iter().copied().collect());
     } else {
@@ -553,6 +562,10 @@ async fn generate_from_word_selector(
 ) -> AppResult<String> {
     let selected_word = pick_word(token, state, transaction).await?;
 
+    tracing::info!("Found word: {}", selected_word.content);
+    tracing::info!("Semantics: {:?}", selected_word.semantic_output);
+    tracing::info!("Grammar: {:?}", selected_word.grammar_output);
+
     state.register_semantics(token.id(), selected_word.semantic_output.clone());
     state.register_grammar(token.id(), selected_word.grammar_output.clone());
 
@@ -584,6 +597,11 @@ async fn pick_word(
         .chain(vec![&i32::MIN])
         .collect_vec();
     let (semantic_tags, grammar_tags) = compute_semantic_and_grammar_dependencies(token, state)?;
+
+    tracing::info!("search_tags: {:?}", search_tags);
+    tracing::info!("semantic_tags: {:?}", semantic_tags);
+    tracing::info!("grammar_tags: {:?}", grammar_tags);
+    tracing::info!("used_words: {:?}", used_words);
 
     let template = include_str!("../../draft_ideas/select_random_word.sql")
         .replace(
@@ -628,7 +646,7 @@ async fn pick_word(
         .chain(grammar_tags.iter())
         .chain(used_words.into_iter())
     {
-        tracing::debug!("Binding parameter to value {}", tag);
+        tracing::info!("Binding parameter to value {}", tag);
         query = query.bind(tag);
     }
 
