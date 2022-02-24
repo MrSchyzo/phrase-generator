@@ -142,7 +142,7 @@ impl PhraseGenerator {
 impl AsyncPhraseGenerator for PhraseGenerator {
     // WHAT IS THIS SMOKING PILE OF SPAGHETT'
     async fn generate(&self, opts: SpeechGenerationOptions) -> AppResult<Speech> {
-        let max_phrases = 256u64; //TODO: hardcoded
+        let max_phrases = 2048u64; //TODO: hardcoded
 
         let mut transaction = self
             .pool
@@ -449,6 +449,13 @@ async fn generate_phrase(
         transaction,
     )
     .await
+    .map(|s| {
+        s.replace("-", "")
+            .replace("_", "")
+            .replace("  ", " ")
+            .trim()
+            .to_owned()
+    })
 }
 
 #[async_recursion]
